@@ -6,10 +6,10 @@ So this app has (planned features):
 - [] Notes on the left, with a handy "Add Note" button so that you can jump between them quickly
 - [] A "permanent/traditional" notepad in one panel ("big" note)
 - [] A format similar to Discord in another panel, with entries editable and automatically dated
-- [] Entries can be quoted or replied to
-- [] Entries can be pinned
-- [] Entries can be moved from note to note
-- [] Hierarchical notes that can be collapsed and expanded
+	- [] Entries include hierarchical notes that can be collapsed and expanded
+	- [] Entries can be quoted or replied to
+	- [] Entries can be pinned
+	- [] Entries can be moved from note to note
 - [] Image/media attachment
 - [] Markdown formatting
 - [] A Find box for the notepad panel with regex

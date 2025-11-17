@@ -240,6 +240,14 @@ div {
 	margin-top: 0;
 }
 
+.entry-text span:hover {
+	background-color: var(--c-background-light);
+}
+
+  .entry-text:hover::before {
+	background-color: var(--c-background-light);
+  }
+
 .disclosure-widget::before {
 	margin-right: 6px;
 	font-family: "Material Symbols";

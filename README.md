@@ -13,6 +13,8 @@ So this app has (planned features):
 	- [] Entries can be moved from note to note
 - [] Image/media attachment
 - [] Markdown formatting
+	- [] Live preview - formatting syntax is greyed out and the affected text is displayed as formatted
+	- [] Tables
 - [] A Find box for the notepad panel with regex
 - [] A Search box with regex and date for the feed panel
 - [] A "daily" note where all entries made for each day are collated into one block, sorted purely by time

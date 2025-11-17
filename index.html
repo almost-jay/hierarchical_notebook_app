@@ -2,13 +2,78 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="stylesheet" href="/src/styles.css" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="./src/styles.css" />
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0" />
     <title>notebook app</title>
-    <script type="module" src="/src/main.ts" defer></script>
-  </head>
-
+    <script type="module" src="./src/main.ts" defer></script>
+  </head>  
   <body>
-    Hello World!
+	<div class="main-container">
+		<!-- Sidebar containing note tabs -->
+		<div class="sidebar">
+			<div class="tab-label" id="daily-note-tab">
+				<div class="material-symbols">overview</div>
+				View collated notes
+			</div>
+			<input type="text" id="sidebar-filter" placeholder="Filter...">
+			<form class="note-tabs">
+				<input type="radio" id="tab1" name="note-tabs" class="tab-input">
+				<label class="tab-label" for="tab1">Note 1</label>
+
+				<input type="radio" id="tab2" name="note-tabs" class="tab-input">
+				<label class="tab-label" for="tab2">Note 2</label>
+
+				<input type="radio" id="tab3" name="note-tabs" class="tab-input" checked>
+				<label class="tab-label" for="tab3">Note 3</label>
+
+				<input type="radio" id="tab4" name="note-tabs" class="tab-input">
+				<label class="tab-label" for="tab4">Note 4</label>
+				
+				<input type="radio" id="tab5" name="note-tabs" class="tab-input">
+				<label class="tab-label" for="tab5">Note 5</label>
+
+				<input type="radio" id="tab6" name="note-tabs" class="tab-input">
+				<label class="tab-label" for="tab6">Note 6</label>
+			</form>
+			<div class="tab-label" id="add-note-tab"><span class="material-symbols">add</span> Add Note</div>
+		</div>
+
+		<!-- Middle panel with logs/entries -->
+		<div class="middle-panel">
+			<div class="note-heading">
+				<div class="note-title">Note 3</div>
+				<div class="note-controls">
+					<button class="material-symbols">pinboard</button>
+					<input class="search-box" type="text" placeholder="Search...">
+				</div>
+			</div>
+			<div class="log-container">
+				<div class="entry">
+					<div class="entry-header">
+						<hr>
+						<span>00:00 2025-11-16</span>
+					</div>
+					<div class="entry-content">
+						<div class="entry-text"><span class="disclosure-widget"></span>Note content here
+							<div class="entry-text"><span class="disclosure-widget"></span>Nested note content here
+								<div class="entry-text"><span class="disclosure-widget"></span>Inception!</div>
+							</div>
+							<div class="entry-text"><span class="disclosure-widget"></span>A second line on the same level</div>
+						</div>
+						<div class="entry-text"><span class="disclosure-widget"></span>Another line on the main level</div>
+					</div>
+				</div>
+				<div class="log-input-container">
+					<button class="material-symbols">attach_file</button>
+					<textarea placeholder="Add to log..."></textarea>
+					<button class="material-symbols">send</button>
+				</div>
+			</div>
+		</div>
+
+		<div class="right-panel">
+			<textarea class="big-note" placeholder="Permanent note content..."></textarea>
+		</div>
+	</div>
   </body>
 </html>

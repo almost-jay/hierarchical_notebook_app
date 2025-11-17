@@ -1,4 +1,303 @@
-body, html {
+@font-face {
+	font-family:  "Material Symbols";	
+	src: url(./assets/MaterialSymbols.ttf);
+}
+
+.material-symbols {
+	font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 48;
+	font-family: "Material Symbols", Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
+	vertical-align: baseline;
+	color: var(--c-text);
+}
+
+:root {
+	--font-size: 16px;
+	--spacing: 8px;
+	--tab-height: 20px;
+	--line-height: 12.5px;
+	--indentation: 30px;
+	--corner-round: 6px;
+	--border-thickness: 2px;
+	--animation-time: 0.15s;
+	--c-background-alt: #22242c;
+	--c-background: #2c2d34;
+	--c-background-light: #3f3e44;
+	--c-border: #526b7c;
+	--c-text-alt: #ddcfbe;
+	--c-text: #f5eadc;
+	--c-dim-alt: #767883;
+	--c-dim: #b2b1a9;
+}
+
+html, body {
 	height: 100%;
+	box-sizing: border-box;
 	font-family: Verdana, Geneva, Tahoma, sans-serif;
+	background-color: var(--c-background-alt);
+	color: var(--c-text);
+	caret-color: var(--c-text-alt);
+	margin: 0;
+}
+
+button, input, textarea {
+	box-sizing: border-box;
+	user-select: none;
+	outline: none;
+	box-shadow: none;
+	border-style: none;
+	vertical-align: middle;
+	background-color: var(--c-background-light);
+	border-radius: var(--corner-round);
+	padding: var(--spacing);
+}
+
+button {
+	color: var(--c-text-alt);
+	font-size: 150%;
+}
+
+button:hover {
+	background-color: var(--c-border);
+	color: var(--c-text);
+	cursor: pointer;
+}
+
+input, textarea {
+	padding-left: calc(2 * var(--spacing));
+	font-family: Verdana, Geneva, Tahoma, sans-serif;
+	font-size: var(--font-size);
+	color: var(--c-text);
+}
+
+textarea {
+	padding-top: calc(3vh - var(--line-height));
+	line-height: 1.5; /* This means this will break if the line height, font face, anything is changed */
+}
+
+div {
+	margin: var(--spacing);
+}
+
+.main-container {
+	margin: 0;
+	display: flex;
+	flex-direction: row;
+	justify-content: start;
+	width: 100%;
+	height: 100%;
+}
+
+.sidebar {
+	float: left;
+	width: 8vw;
+	display: flex;
+	flex-direction: column;
+	justify-content: start;
+	align-items: stretch;
+}
+
+.sidebar, .note-tabs {
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+#sidebar-filter {
+	border-radius: 0;
+	margin-bottom: 2vh;
+}
+
+.tab-input {
+	display: none;
+}
+
+.tab-label {
+	flex-basis: var(--tab-height);
+	background-color: var(--c-background-alt);
+	padding: var(--spacing);
+}
+
+.tab-label:hover {
+	background-color: var(--c-background);
+	cursor: pointer;
+}
+
+.tab-label {
+	padding-left: 1vw; /* Need to make sure it won't be too close to the edge of the screen */
+	display: block;
+	position: relative;
+}
+
+
+.tab-input:checked + .tab-label {
+	cursor: default;
+	background-color: var(--c-background);
+	/* border-top: var(--border-thickness) solid var(--c-border);
+	border-bottom: var(--border-thickness) solid var(--c-border); */
+}
+
+.tab-input:checked + .tab-label::after {  /* This makes the tab "stick out" & cover the border to make it look seamless. */
+	position: absolute;
+	height: calc(var(--tab-height) + var(--spacing) + var(--border-thickness));
+	top: 0px;
+	content: "";
+	z-index: 10;
+	border: var(--border-thickness) solid var(--c-background);
+	background-color: var(--c-background);
+	right: calc(calc(var(--border-thickness) * -1) - 1px);
+}
+
+#daily-note-tab {
+	padding-top: 3vh;
+	padding-bottom: 3vh;
+	text-align: center;
+	padding-left: 0;
+}
+
+#daily-note-tab .material-symbols {
+	font-size: 200%;
+}
+
+/* MIDDLE PANEL */
+
+.middle-panel {
+	z-index: 0;
+	margin-left: 0;
+	background-color: var(--c-background);
+	/* border: var(--border-thickness) solid var(--c-border); */
+	border-radius: calc(2 * var(--corner-round));
+	width: 60vw;
+	display: flex;
+	flex-flow: column nowrap;
+	justify-content: space-between;
+	resize: horizontal;
+	overflow-y: auto;
+}
+
+.note-heading {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding-bottom: var(--spacing);
+	border-bottom: var(--border-thickness) solid var(--c-dim-alt);
+	vertical-align: baseline;
+	height: 6vh;
+}
+
+.note-title {
+	margin-left: var(--indentation);
+	font-size: 125%;
+	vertical-align: middle;
+}
+
+.note-controls {
+	display: flex;
+	gap: var(--spacing);
+}
+
+.note-controls button {
+	height: calc(6vh - var(--spacing));
+	width: calc(6vh - var(--spacing));
+}
+
+.entry {
+	margin-bottom: calc(2 * var(--spacing));
+}
+
+.entry-content {
+	margin-top: 0;
+}
+
+.entry-header {
+	text-align: right;
+	font-size: 75%;
+	color: var(--c-dim);
+	height: 0; /* Flatten this so that it appears in line with the 1st line of the entry */
+	margin: 0;
+}
+
+.entry-text { /* This is applied to all text in the entry. */
+	border-radius: 0;
+	border-radius: none;
+	margin-bottom: 0;
+	padding-top: var(--spacing);
+}
+
+.entry-text:not(:first-child) {
+	margin-top: 0;
+}
+
+.disclosure-widget::before {
+	margin-right: 6px;
+	font-family: "Material Symbols";
+	cursor: pointer;
+	content: "keyboard_arrow_down";
+	user-select: none;
+	color: var(--c-dim);
+}
+
+.disclosure-widget:hover::before {
+	color: var(--c-text);
+}
+
+.disclosure-widget:active::before {
+	content: "keyboard_arrow_right";
+}
+
+.collapsed {
+	display: none;
+}
+
+.collapsed .disclosure-widget::before {
+	content: "keyboard_arrow_right";
+}
+
+.entry-text > div.entry-text { /* This is only applied to entries that are not at the topmost level. */
+	border-left: calc(var(--border-thickness) / 2) solid var(--c-dim-alt);
+	margin-left: 8px; /* TODO: Check if this should be set dynamically instead. Decrease to move the border leftwards */
+	padding-left: var(--indentation);
+}
+
+.disclosure-widget:hover ~ .entry-text { /* When a disclosure-widget is hovered over, it highlights the borders of the children below it. */
+	border-left-color: var(--c-dim);
+}
+
+.log-input-container {
+	padding-top: var(--spacing);
+	display: flex;
+	gap: var(--spacing);
+	justify-content: space-between;
+	border-radius: var(--corner-round);
+	height: 6vh;
+}
+
+.log-input-container button {
+	flex-basis: 6vh;
+	height: 6vh;
+}
+
+.log-input-container textarea {
+	flex-grow: 1;
+	resize: none;
+	overflow-y: hidden;
+	height: auto;
+}
+
+.right-panel {
+	width: 40vw;
+	background-color: var(--c-background-light);
+	border: var(--border-thickness) solid var(--c-dim-alt);
+	flex-grow: 1;
+}
+
+.big-note {
+	width: 100%;
+	height: 100%;
+	border: var(--border-thickness) solid var(--c-background-alt);
+	left: var(--spacing);
+	top: var(--spacing);
+	resize: none;
+	background-color: var(--c-background-alt);
+	border-radius: var(--corner-round);
 }

@@ -19,6 +19,8 @@
 	--corner-round: 6px;
 	--border-thickness: 2px;
 	--animation-time: 0.15s;
+	--logbox-min-height: 6vh;
+	--logbox-max-height: 50vh;
 	--c-background-alt: #22242c;
 	--c-background: #2c2d34;
 	--c-background-light: #3f3e44;
@@ -288,20 +290,32 @@ div {
 	display: flex;
 	gap: var(--spacing);
 	justify-content: space-between;
+	align-items: end;
 	border-radius: var(--corner-round);
-	height: 6vh;
+	min-height: var(--logbox-min-height);
 }
 
 .log-input-container button {
-	flex-basis: 6vh;
-	height: 6vh;
+	flex-basis: var(--logbox-min-height);
+	height: var(--logbox-min-height);
 }
 
 .log-input-container textarea {
 	flex-grow: 1;
 	resize: none;
-	overflow-y: hidden;
-	height: auto;
+	overflow-y: auto;
+	min-height: var(--logbox-min-height);
+	height: var(--logbox-min-height);
+	
+}
+
+@supports(field-sizing: content) {
+	.log-input-container textarea {
+		height: auto;
+		min-height: var(--logbox-min-height);
+		max-height: var(--logbox-max-height);
+		field-sizing: content;
+	}
 }
 
 .right-panel {

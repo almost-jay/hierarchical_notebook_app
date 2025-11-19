@@ -72,7 +72,8 @@ input, textarea {
 }
 
 textarea {
-	padding-top: calc(3vh - var(--line-height));
+	padding-top: calc(calc(var(--logbox-min-height) / 2) - var(--line-height));
+	padding-bottom: calc(calc(var(--logbox-min-height) / 2) - var(--line-height));
 	line-height: 1.5; /* This means this will break if the line height, font face, anything is changed */
 }
 

@@ -14,8 +14,8 @@
     "windows": [
       {
         "title": "hierarchical-notebook-app",
-        "width": 800,
-        "height": 600
+        "width": 1280,
+        "height": 720
       }
     ],
     "security": {
@@ -32,5 +32,5 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
-  }
+  },
 }

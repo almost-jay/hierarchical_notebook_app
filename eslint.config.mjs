@@ -25,10 +25,26 @@ export default defineConfig([{
         parser: tsParser,
     },
 
+	files: ["src/**/*.{ts}"],
+	
     rules: {
         "@typescript-eslint/explicit-member-accessibility": ["error", {
             accessibility: "explicit",
         }],
+
+		"@typescript-eslint/typedef": ["warn",{
+			"parameter": true,
+			"arrayDestructuring": true,
+			"objectDestructuring": true
+			
+		}],
+
+		"@typescript-eslint/typedef": ["error",{
+			"variableDeclaration": true,
+			"variableDeclarationIgnoreFunction": true,
+			"memberVariableDeclaration": true
+			
+		}],
 
         "comma-dangle": ["error", {
             arrays: "always-multiline",
@@ -38,10 +54,9 @@ export default defineConfig([{
             functions: "always-multiline",
         }],
 
-        "@typescript-eslint/no-unused-vars": ["error", {
-            vars: "all",
-            args: "after-used",
-            ignoreRestSiblings: true,
+        "@typescript-eslint/no-unused-vars": ["warn", {
+			argsIgnorePattern: "^_",
+			caughtErrorsIgnorePattern: "^_",
             varsIgnorePattern: "^_",
         }],
     },

@@ -7,7 +7,7 @@ class Manager {
 	activeNoteIndex: number;
 	userSettings = {
 		indentString: "\t",
-		groupInterval: 1, // minutes
+		groupInterval: 5, // minutes
 		noteIndexFileName: ".note_headings",
 	};
 	logInput: HTMLTextAreaElement;
@@ -119,14 +119,15 @@ class Manager {
 					textContent += "\n"+entries[i].text;
 			}
 
+			let parents = [];
 			const splitLines = textContent.split('\n');
 
-			let parents = [];
-			
 			for (let i = 0; i < splitLines.length; i++) {
 				const line: string = splitLines[i];
 
 				const currentIndentationLevel: number = this.countLeadingTabs(line);
+				console.log("current indentation level: "+currentIndentationLevel);
+				console.log("line that was checked: '"+line+"'")
 				const text: string = this.stripLeadingTabs(line);
 
 				let hasChildren = false;
@@ -151,11 +152,14 @@ class Manager {
 				entryTextDiv.appendChild(entryTextSpan);
 				
 				let parentContainer = entryDiv;
-				for (let j = currentIndentationLevel - 1; j >= 0; j--) {
-					if (parents[j]) {
-						parentContainer = parents[j];
-						break;
+				for (let j = 0; j < currentIndentationLevel; j++) {
+					if (!parents[j]) {
+						const emptyDiv = document.createElement("div");
+						emptyDiv.classList.add("entry-text");
+						parentContainer.appendChild(emptyDiv);
+						parents[j] = emptyDiv;
 					}
+					parentContainer = parents[j];
 				}
 				
 				parentContainer.appendChild(entryTextDiv);
@@ -183,8 +187,8 @@ class Manager {
 	}
 
 	private submitEntry() {
-		const entryText = this.logInput.value.trim();
-		if (entryText.length == 0) return;
+		const entryText = this.logInput.value;
+		if (entryText.trim().length == 0) return;
 		if (this.activeNoteIndex == null) return; // TODO
 		const note = this.notes[this.activeNoteIndex];
 		const currentTime = new Date();
@@ -200,7 +204,7 @@ class Manager {
 		
 		const splitLines = entryText.split('\n');
 		const indentLevel = this.countLeadingTabs(splitLines[splitLines.length - 1]);
-		
+		console.log("New entry indent level: "+indentLevel);
 		const newEntry = new Entry(note.entries ? note.entries.length : 0, groupId, entryText, currentTime, indentLevel);
 		note.addEntry(newEntry);
 

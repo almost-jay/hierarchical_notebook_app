@@ -7,7 +7,7 @@ class Manager {
 	activeNoteIndex: number;
 	userSettings = {
 		indentString: "\t",
-		groupInterval: 5, // minutes
+		groupInterval: 1, // minutes
 		noteIndexFileName: ".note_headings",
 	};
 	logInput: HTMLTextAreaElement;
@@ -46,7 +46,7 @@ class Manager {
 			this.updateLogInputHeight();
 		});
 		this.logInput.addEventListener("keydown", (e) => {
-			console.log(e);
+			// console.log(e);
 			if (e.keyCode == 9) { // Tab key - because Shift + Tab returns e.key == "Unidentified"
 				e.preventDefault();
 				const start: number = this.logInput.selectionStart;
@@ -58,7 +58,7 @@ class Manager {
 					const newText: string = NoteUtils.shiftSelectedText(text, start, end, -1);
 					this.logInput.value = newText;
 					this.currentIndentationLevel--;
-				} else {
+				} else if (this.currentIndentationLevel < 30) { // Binary serialisation format can only store up to 31 indentations
 					const newText: string = NoteUtils.shiftSelectedText(text, start, end, 1);
 					this.logInput.value = newText;
 					this.currentIndentationLevel++;
@@ -79,13 +79,23 @@ class Manager {
 		
 	}
 
-	private displayCurrentNote() {
+	private displayCurrentEntries() {
 		if (this.activeNoteIndex == null) return; // TODO
-
+		
 		const entriesContainer = document.getElementById("entry-container") as HTMLDivElement;
 		entriesContainer.innerHTML = "";
+
+		let entries = this.notes[this.activeNoteIndex].entries;
+		let groupedEntries: Array<Entry> = [this.notes[this.activeNoteIndex].entries[0]];
+		for (const entry of entries) {
+			if (entry.groupId > groupedEntries[groupedEntries.length - 1].groupId) {
+				groupedEntries.push(entry);
+			}
+		}
 		
-		for (const entry of this.notes[this.activeNoteIndex].entries) {
+		for (let groupId = 0; groupId < groupedEntries.length; groupId++) {
+			const entry = groupedEntries[groupId];
+
 			const entryDiv = document.createElement("div");
 			entryDiv.classList.add("entry-content");
 
@@ -100,10 +110,18 @@ class Manager {
 			entryHeader.appendChild(timestampSpan);
 
 			entryDiv.appendChild(entryHeader);
-		
-			const splitLines = entry.text.split('\n');
+			
+			let textContent = entry.text;
 
-			let parents = []; // A stack that keeps track of the current nesting.
+			const iStop = groupedEntries[groupId + 1] ? groupedEntries[groupId + 1].id : entries[entries.length - 1].id + 1
+
+			for (let i = entry.id + 1; i < iStop; i++) {
+					textContent += "\n"+entries[i].text;
+			}
+
+			const splitLines = textContent.split('\n');
+
+			let parents = [];
 			
 			for (let i = 0; i < splitLines.length; i++) {
 				const line: string = splitLines[i];
@@ -129,7 +147,7 @@ class Manager {
 				}
 
 				const entryTextSpan = document.createElement("span");
-				entryTextSpan.textContent = line;
+				entryTextSpan.textContent = text;
 				entryTextDiv.appendChild(entryTextSpan);
 				
 				let parentContainer = entryDiv;
@@ -143,24 +161,9 @@ class Manager {
 				parentContainer.appendChild(entryTextDiv);
 				parents = parents.slice(0, currentIndentationLevel); // Truncate because otherwise we end up with stale deeper levels
 				parents[currentIndentationLevel] = entryTextDiv;
-
-				// entryDiv.appendChild(entryTextDiv);
-				// // TODO: Grouping 
-
 			}
 			entriesContainer.appendChild(entryDiv);
 		}
-		//<div class="entry-content">
-					// 	<div class="entry-text">
-					// 		<span class="disclosure-widget"></span><span>Note content here</span>
-					// 		<div class="entry-text"><span class="disclosure-widget"></span><span>Nested note content here</span>
-					// 			<div class="entry-text"><span class="disclosure-widget"></span><span>Inception!</span></div>
-					// 		</div>
-					// 		<div class="entry-text"><span class="disclosure-widget"></span><span>A second line on the same level</span></div>
-					// 	</div>
-					// 	<div class="entry-text"><span class="disclosure-widget"></span><span>Another line on the main level</span></div>
-					// </div>
-
 	}
 
 	private insertNewLine() {
@@ -185,21 +188,29 @@ class Manager {
 		if (this.activeNoteIndex == null) return; // TODO
 		const note = this.notes[this.activeNoteIndex];
 		const currentTime = new Date();
-		const groupId = 0; // TODO
-		//let indentLevel = entryText.split('\n')[entryText.length - 1].split(this.userSettings.indentString).length - 1;
-		const split = entryText.split('\n');
-		const indentLevel = (split[split.length - 1].match(`/${this.userSettings.indentString}/`) || []).length;
+		let groupId = 0;
+		if (note.entries.length > 0) {
+			groupId = note.entries[note.entries.length - 1].groupId;
+			let previousEntryCreated = note.entries[note.entries.length - 1].created;
+			let timeSincePreviousEntry = currentTime.getTime() - previousEntryCreated.getTime();
+			if (timeSincePreviousEntry / 60000 > this.userSettings.groupInterval) { // divide by 60000 ∵ ms -> minutes
+				groupId++;
+			}
+		}
+		
+		const splitLines = entryText.split('\n');
+		const indentLevel = this.countLeadingTabs(splitLines[splitLines.length - 1]);
 		
 		const newEntry = new Entry(note.entries ? note.entries.length : 0, groupId, entryText, currentTime, indentLevel);
 		note.addEntry(newEntry);
 
 		// TODO: Verify that the entry was submitted before clearing textarea
 		
-		this.logInput.value = "\t".repeat(indentLevel); 
+		this.logInput.value = (this.userSettings.indentString).repeat(indentLevel);
+		console.log( (this.userSettings.indentString).repeat(indentLevel));
 		this.updateLogInputHeight();
 
-		this.displayCurrentNote();
-		console.log(groupId);
+		this.displayCurrentEntries();
 	}
 
 	private loadAllNotes() {

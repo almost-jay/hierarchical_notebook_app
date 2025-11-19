@@ -11,7 +11,7 @@ class Manager {
 		noteIndexFileName: ".note_headings",
 	};
 	logInput: HTMLTextAreaElement;
-
+	currentIndentationLevel: number = 0;
 	public constructor() {
 		this.logInput = document.getElementById("log-input") as HTMLTextAreaElement;
 		
@@ -46,7 +46,7 @@ class Manager {
 			this.updateLogInputHeight();
 		});
 		this.logInput.addEventListener("keydown", (e) => {
-			//console.log(e);
+			console.log(e);
 			if (e.keyCode == 9) { // Tab key - because Shift + Tab returns e.key == "Unidentified"
 				e.preventDefault();
 				const start: number = this.logInput.selectionStart;
@@ -57,22 +57,25 @@ class Manager {
 				if (e.shiftKey) { // Shift + Tab should be outdent/dedent
 					const newText: string = NoteUtils.shiftSelectedText(text, start, end, -1);
 					this.logInput.value = newText;
-					
+					this.currentIndentationLevel--;
 				} else {
 					const newText: string = NoteUtils.shiftSelectedText(text, start, end, 1);
 					this.logInput.value = newText;
+					this.currentIndentationLevel++;
 				}
 
 			} else if (e.key == 'Enter') {
-				if (e.shiftKey) {
-					e.preventDefault();
-					this.submitEntry(this.logInput.value.trim());
+				e.preventDefault();
+				if (e.shiftKey) {			
+					this.submitEntry();
+				} else {
+					this.insertNewLine();
 				}
 			}
 		});
 
 		const submitEntryButton = document.getElementById("submit-entry-button") as HTMLButtonElement;
-		submitEntryButton.addEventListener("click", (e) => { this.submitEntry(this.logInput.value.trim()) });
+		submitEntryButton.addEventListener("click", (e) => { this.submitEntry() });
 		
 	}
 
@@ -160,17 +163,25 @@ class Manager {
 
 	}
 
+	private insertNewLine() {
+		const lines = this.logInput.value.split('\n');
+		const currentLine = lines[lines.length - 1];
+		this.currentIndentationLevel = this.countLeadingTabs(currentLine);
+		
+		const newLine = '\n' + this.userSettings.indentString.repeat(this.currentIndentationLevel);
+		this.logInput.value += newLine;
+
+		this.updateLogInputHeight();
+	}
+
 	private updateLogInputHeight() {
 		this.logInput.style.height = "0px";
 		this.logInput.style.height = this.logInput.scrollHeight + "px";
 	}
 
-	private submitEntry(entryText: string) {
-		// Get the active Note at this.notes[activeNoteId]
-		// Get current time and date
-		// Compare w time of prev. entry
-		// If within this.userSettings.groupInterval minutes of each other, groupId = same as prev msg
-		// Otherwise, groupId = prev msg + 1
+	private submitEntry() {
+		const entryText = this.logInput.value.trim();
+		if (entryText.length == 0) return;
 		if (this.activeNoteIndex == null) return; // TODO
 		const note = this.notes[this.activeNoteIndex];
 		const currentTime = new Date();

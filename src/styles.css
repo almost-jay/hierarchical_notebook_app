@@ -251,35 +251,36 @@ div {
 	background-color: var(--c-background-light);
   }
 
-.disclosure-widget::before {
+.disclosure-widget {
 	margin-right: 6px;
 	font-family: "Material Symbols";
 	cursor: pointer;
-	content: "keyboard_arrow_down";
 	user-select: none;
 	color: var(--c-dim);
+}
+
+.entry-text:not(.collapsed) > .disclosure-widget::before {
+	content: "keyboard_arrow_down";
+	display: inline;
 }
 
 .disclosure-widget:hover::before {
 	color: var(--c-text);
 }
 
-.disclosure-widget:active::before {
+.entry-text.collapsed > .disclosure-widget::before {
 	content: "keyboard_arrow_right";
-}
-
-.collapsed {
-	display: none;
-}
-
-.collapsed .disclosure-widget::before {
-	content: "keyboard_arrow_right";
+	display: inline;
 }
 
 .entry-text > div.entry-text { /* This is only applied to entries that are not at the topmost level. */
 	border-left: calc(var(--border-thickness) / 2) solid var(--c-dim-alt);
 	margin-left: 8px; /* TODO: Check if this should be set dynamically instead. Decrease to move the border leftwards */
 	padding-left: var(--indentation);
+}
+
+.entry-text.collapsed > div.entry-text {
+	display: none;
 }
 
 .disclosure-widget:hover ~ .entry-text { /* When a disclosure-widget is hovered over, it highlights the borders of the children below it. */

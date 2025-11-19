@@ -21,3 +21,6 @@ So this app has (planned features):
 	- [] The "big" note associated with each entry can be viewed by selecting an entry
 
 Too lazy to learn how to use QT/GDK frameworks, so Tauri + TypeScript until I can be bothered moving
+
+* Run with `npm run tauri dev`
+* If it complains, try `cargo clean --manifest-path src-tauri/Cargo.toml` first

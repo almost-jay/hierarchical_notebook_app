@@ -1,12 +1,11 @@
 import { Entry } from "./entry";
 import { NoteUtils } from "./note-utils";
-import { writeFile, readFile } from '@tauri-apps/plugin-fs';
 
 export class Note {
 	id: string; // Slugified version of title
 	title: string; // 
 	persistentText: string;
-	entries: Entry[];
+	entries: Entry[] = [];
 	created: Date;
 	isUnsaved: boolean;
 
@@ -76,9 +75,10 @@ export class Note {
 
 	}
 	
-	public addEntry(newEntry: Entry) {
-		// this.entries.push(newEntry)
+	public addEntry(newEntry: Entry): void {
+		this.entries.push(newEntry);
 	}
+
 	public updateEntry(targetEntryId: number, newText: string) {
 		// this.entries[id].text = newText
 	}

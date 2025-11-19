@@ -13,8 +13,8 @@ export class Entry {
 		this.text = text;
 		this.created = created;
 		this.indentLevel = indentLevel;
-		if (quotedId != 65535) this.quotedId = quotedId; // Because the binary storage system encodes an undefined quotedId as 1111..., it will be parsed to decimal as 65535
-		if (lastEdited.getTime() != new Date(0).getTime())this.lastEdited = lastEdited; // Similarly, an undefined lastEdited is stored as 0000... (because 1111... would be too large for JS to handle)
+		if (quotedId) if (quotedId != 65535) this.quotedId = quotedId; // Because the binary storage system encodes an undefined quotedId as 1111..., it will be parsed to decimal as 65535
+		if (lastEdited) if (lastEdited.getTime() != new Date(0).getTime())this.lastEdited = lastEdited; // Similarly, an undefined lastEdited is stored as 0000... (because 1111... would be too large for JS to handle)
 	}
 
 	public toBinary(): ArrayBuffer {

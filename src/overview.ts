@@ -16,6 +16,7 @@ export class Overview extends Note {
 		this.selectedDateRange = new DateRange(new Date());
 		this.aggregatedEntries = Overview.collateEntries(allEntries);
 		this.earliestDate = Object.keys(this.aggregatedEntries).sort()[0] || this.currentDate;
+		this.isUnsaved = false;
 	}
 
 	public addEntry(newEntry: Entry): void {
@@ -82,7 +83,6 @@ export class Overview extends Note {
 		const sortedEntries = [...allEntries].sort((a, b) =>
 			a.entry.created.getTime() - b.entry.created.getTime()
 		);
-		console.log(sortedEntries);
 		const aggregatedEntries: EntriesByDay = {};
 		let nextDisplayGroupId = -1;
 		let previousEntryWrapper: EntryWithSource | null = null;
@@ -111,7 +111,6 @@ export class Overview extends Note {
 			aggregatedEntries[day].push(clonedEntry);
 			previousEntryWrapper = entryWrapper;
 		}
-		console.log(aggregatedEntries);
 		return aggregatedEntries
 	}
 }

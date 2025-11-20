@@ -4,14 +4,27 @@ import { NoteUtils } from "./note-utils";
 export class Note {
 	id: string; // Slugified version of title
 	title: string; // 
-	persistentText: string;
+	persistentText: string = "";
+	savedPersistentText: string = "";
 	entries: Entry[] = [];
 	created: Date;
+	lastSaved?: Date;
 	isUnsaved: boolean;
+	isTitleSet: boolean;
 
-	constructor(title: string) {
+	constructor(title: string, created?: Date, lastSaved?: Date) {
 		this.title = title;
 		this.id = NoteUtils.slugify(title);
+		this.isUnsaved = true;
+		this.isTitleSet = false;
+		this.created = created ?? new Date();
+		if (this.lastSaved) this.lastSaved = lastSaved;
+	}
+
+	public updatePersistentTextContent(textContent: string) {
+		this.persistentText = textContent;
+
+		this.isUnsaved = this.persistentText != this.savedPersistentText;
 	}
 
 	public async loadFromFile(): Promise<void> {
@@ -37,6 +50,7 @@ export class Note {
 					this.entries.push(new Entry(id, groupId, text, created, indentLevel, lastEdited, quotedId));
 					i += 25 + textLength;
 				}
+				this.isUnsaved = false;
 			} else {
 				console.error(`Could not find entries file ${entriesFileName}!`);
 			}
@@ -46,9 +60,19 @@ export class Note {
 	}
 
 	async save() {
+		if (!this.isTitleSet) {
+			let newTitle: string = this.persistentText.split("\n")[0];
+			let newId: string = NoteUtils.slugify(newTitle);
+			if (newId == "") {
+				if (!confirm(`Save this note as ${this.id}.md?`)) return;
+			}
+			this.title = newTitle;
+			this.id = newId;
+			this.isTitleSet = true;
+		}
 		// Write to filepath for both entries and persistent
-		const persistentFileName = `${this.title}-persistent.md`;
-		const entriesFileName = `${this.title}-entries.bin`;
+		const persistentFileName = `${this.id}-persistent`;
+		const entriesFileName = `${this.id}-entries`;
 
 		const buffers: ArrayBuffer[] = this.entries.map(e => e.toBinary());
 		const totalLength = buffers.reduce((sum, buffer) => sum + buffer.byteLength, 0);
@@ -60,11 +84,15 @@ export class Note {
 			entriesAsBinary.set(new Uint8Array(buffer), offset);
 			offset += buffer.byteLength;
 		}
-
-		await NoteUtils.writeMarkdownFile(persistentFileName, this.persistentText);
-		await NoteUtils.writeBinaryFile(entriesFileName, entriesAsBinary);
 		
+		this.lastSaved = new Date();
+		let frontmatter: String = `---\ntitle: ${this.title}\ncreated: ${this.created.getTime()}\nlastSaved: ${this.lastSaved.getTime()}---`;
 
+		await NoteUtils.writeMarkdownFile(persistentFileName, frontmatter + this.persistentText);
+		await NoteUtils.writeBinaryFile(entriesFileName, entriesAsBinary);
+
+		this.savedPersistentText = this.persistentText;
+		this.isUnsaved = false;
 	}
 
 
@@ -81,6 +109,10 @@ export class Note {
 
 	public updateEntry(targetEntryId: number, newText: string) {
 		// this.entries[id].text = newText
+	}
+
+	rename() {
+		// TODO
 	}
 	
 }

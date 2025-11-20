@@ -34,33 +34,33 @@ export class NoteUtils {
 
 	public static async getMarkdownFile(filename: string): Promise<string> {
 		const dir = await appDataDir();
-		const path = `{dir}/${filename}`;
+		const path = `${dir}/${filename}`;
 		const content = await readTextFile(path);
 		return content;
 	}
 
 	public static async writeMarkdownFile(filename: string, content: string): Promise<void> {
 		const dir = await appDataDir();
-		const path = `{dir}/${filename}`;
-		await writeTextFile(path, content);
+		const path = `${dir}/${filename}.md`;
+		//await writeTextFile(path, content);
 	}
 
 	public static async getBinaryFile(filename: string): Promise<ArrayBuffer> {
 		const dir = await appDataDir();
-		const path = `{dir}/${filename}`;
+		const path = `${dir}/${filename}`;
 		const contentRaw = await readFile(filename);
 		return contentRaw.buffer;
 	}
 
 	public static async writeBinaryFile(filename: string, content: Uint8Array): Promise<void> {
 		const dir = await appDataDir();
-		const path = `{dir}/${filename}`;
+		const path = `${dir}/${filename}.bin`;
 		await writeFile(path, content);
 	}
 
 	public static async doesFileExist(filename: string): Promise<boolean> {
 		const dir = await appDataDir();
-		const path = `{dir}/${filename}`;
+		const path = `${dir}/${filename}`;
 		const result = await exists(path);
 		return result;
 	}

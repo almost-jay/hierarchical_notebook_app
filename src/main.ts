@@ -1,7 +1,9 @@
 import { Entry } from "./entry";
 import { Note } from "./note";
 import { NoteUtils } from "./note-utils";
-import { EntryWithSource, Overview } from "./overview";
+import { Overview } from "./overview";
+
+// CHECK: remove plugin dialog? remove rust code?
 
 class Manager {
 	notes: Note[] = [];
@@ -13,10 +15,12 @@ class Manager {
 		noteIndexFileName: ".note_headings",
 	};
 	logInput: HTMLTextAreaElement;
+	persistentTextInput: HTMLTextAreaElement;
 	currentIndentationLevel: number = 0;
 
 	public constructor() {
 		this.logInput = document.getElementById("log-input") as HTMLTextAreaElement;
+		this.persistentTextInput = document.getElementById("persistent-text-input") as HTMLTextAreaElement;
 
 		this.initialiseNotes();
 		this.overview = this.initialiseOverview();
@@ -24,20 +28,16 @@ class Manager {
 		this.initialiseInput();
 		// TODO: Also store and fetch user settings
 		// TODO: Also cache and load data
-		this.setCurrentNote(this.notes[this.notes.length - 1].id);
+		this.setCurrentNote(this.notes[Math.min(this.notes.length - 1,1)].id);
 	}
 
 	private initialiseNotes() {
 
 		// TODO: Load a note from the dang cache
 		// Also the overview is in Notes
-
+		this.loadAllNotes();
 		const noteTabsContainer = document.getElementById("note-tabs") as HTMLDivElement;
 		noteTabsContainer.innerHTML = "";
-
-		this.addNewNote("Untitled 1"); // DEBUG
-		for (const note of this.notes) {
-		}
 		// FOR i in note
 		// do:
 		// uhhh render it or sum idfk
@@ -51,6 +51,18 @@ class Manager {
 	}
 
 	private initialiseInput() {
+		window.addEventListener("keydown", (e) => {
+			if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+				e.preventDefault();
+				
+				this.saveNotes(e.shiftKey); // Saves all notes on Ctrl + Shift + S, and just the active one on Ctrl + S
+			}
+		});
+
+		this.persistentTextInput.addEventListener("keyup", (e) => {
+			if (e.key == " " || e.key == "Enter") this.updatePersistentText();
+		});
+				
 		const noteTabsContainer = document.getElementById("sidebar") as HTMLFormElement;
 		noteTabsContainer.addEventListener("click", (e) => {
 			const target = e.target as HTMLElement;
@@ -216,13 +228,13 @@ class Manager {
 			}
 
 			entriesContainer.appendChild(entryDiv);
-			
+
 			currentIndex = nextIndex;
 		}
 
 	}
 
-	private setCurrentNote(noteId: string) {
+	private setCurrentNote(noteId: string) { // CHECK: Should this be renamed because it really mainly renders the note
 		const overviewControls = document.getElementById("overview-controls") as HTMLDivElement;
 		if (this.activeNoteIndex == 0) {
 			overviewControls.classList.remove("show");
@@ -233,18 +245,22 @@ class Manager {
 		if (!this.notes[this.activeNoteIndex]) return; // TODO
 
 		const noteTitle = document.getElementById("note-title");
-		noteTitle.textContent = this.notes[this.activeNoteIndex].title;
+		noteTitle.textContent = (this.notes[this.activeNoteIndex].isUnsaved ? "* " : "") + this.notes[this.activeNoteIndex].title; // CHECK: Would this work better as an .unsaved class with ::before and color: var(--text-alt)
 
 		if (this.activeNoteIndex == 0) {
 			overviewControls.classList.add("show");
 			this.updateOverview();
+			this.persistentTextInput.value = "";
+			// TODO: Display persistent text for overview
+		} else {
+			this.persistentTextInput.value = this.notes[this.activeNoteIndex].persistentText;
 		}
 
 		this.displayCurrentEntries();
 	}
 
-	private addNewNote(noteTitle: string) { // TODO: make sure there is enough space for the note?
-		const newNote = new Note(noteTitle);
+	private addNewNote(noteTitle: string, created?: Date, lastEdited?: Date) { // TODO: make sure there is enough space for the note?
+		const newNote = new Note(noteTitle, created, lastEdited);
 		this.notes.push(newNote);
 		this.activeNoteIndex = this.notes.length - 1;
 
@@ -282,6 +298,13 @@ class Manager {
 	private updateLogInputHeight() {
 		this.logInput.style.height = "0px";
 		this.logInput.style.height = this.logInput.scrollHeight + "px";
+	}
+
+	private updatePersistentText() {
+		if (this.activeNoteIndex == 0) return;
+		if (!this.notes[this.activeNoteIndex]) return;
+
+		this.notes[this.activeNoteIndex].updatePersistentTextContent(this.persistentTextInput.value);
 	}
 
 	private submitEntry() {
@@ -338,19 +361,47 @@ class Manager {
 		
 	}
 
-	private loadAllNotes() {
+	private async loadAllNotes() {
 		// Check if the headings file exists
-		// If it does, we will  
+		// If it does, we will add new notes
 
 		if (NoteUtils.doesFileExist(this.userSettings.noteIndexFileName)) {
-			let notesList = NoteUtils.getMarkdownFile(this.userSettings.noteIndexFileName);
-		} else {
+			const noteIdList: String[] = (await NoteUtils.getMarkdownFile(this.userSettings.noteIndexFileName)).split("\n");
+			for (const noteId in noteIdList) {
+				if (await NoteUtils.doesFileExist(noteId)) {
+					const fileText: string = await NoteUtils.getMarkdownFile(noteId);
+					const title = fileText.match(/title:\s*(.+)/)?.[1] ?? "";
+					const created = new Date(Number(fileText.match(/created:\s*(\d+)/)?.[1] ?? "0"));
+  					const saved = new Date(Number(fileText.match(/saved:\s*(\d+)/)?.[1] ?? "0"));
+
+					this.addNewNote(title, created, saved);
+				} else {
+					// Display a little toast thing here to say "Failed to load ${noteId}"
+				}
+			}
+		} else { 
 			// We will not create any notes.
 		}
 	}
 
-	private saveAllNotes() {
-		this.userSettings.noteIndexFileName
+	private async saveNotes(saveAll: boolean = false) {
+		if (!saveAll && this.activeNoteIndex == 0) return;
+		let noteHeadings = "";
+		for (let i = 1; i < this.notes.length; i++) {
+			const note = this.notes[i];
+			noteHeadings += note.id+"\n";
+			note.updatePersistentTextContent(this.persistentTextInput.value);
+			if (saveAll) await note.save();
+
+		}
+		
+		if (!saveAll) await this.notes[this.activeNoteIndex].save();
+		this.setCurrentNote(this.notes[this.activeNoteIndex].id);
+		await NoteUtils.writeMarkdownFile(this.userSettings.noteIndexFileName,noteHeadings);
+	}
+
+	private async writeHeadingsFile() {
+
 	}
 
 	countLeadingTabs(line): number {

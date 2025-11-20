@@ -10,16 +10,18 @@
   <body>
 	<div class="main-container">
 		<!-- Sidebar containing note tabs -->
-		<div class="sidebar">
-			<div class="tab-label" id="daily-note-tab">
+		<div id="sidebar">
+			<input type="radio" id=".overview" name="note-tabs" class="tab-input">
+			<label class="tab-label" for=".overview" id="overview-tab" title="View collated notes">
 				<div class="material-symbols">overview</div>
-				View collated notes
-			</div>
+				Overview
+			</label>
+			
 			<input type="text" id="sidebar-filter" placeholder="Filter...">
-			<form class="note-tabs">
-				<input type="radio" id="tab1" name="note-tabs" class="tab-input">
+			<div class="note-tabs" id="note-tabs">
 				<label class="tab-label" for="tab1">Note 1</label>
-
+				<input type="radio" id="tab1" name="note-tabs" class="tab-input">
+				
 				<input type="radio" id="tab2" name="note-tabs" class="tab-input">
 				<label class="tab-label" for="tab2">Note 2</label>
 
@@ -34,14 +36,22 @@
 
 				<input type="radio" id="tab6" name="note-tabs" class="tab-input">
 				<label class="tab-label" for="tab6">Note 6</label>
-			</form>
+			</div>
 			<div class="tab-label" id="add-note-tab"><span class="material-symbols">add</span> Add Note</div>
 		</div>
 
 		<!-- Middle panel with logs/entries -->
 		<div class="middle-panel">
 			<div class="note-heading">
-				<div class="note-title">Note 3</div>
+				<div id="note-title">Note 3</div>
+				<div class="overview-controls" id="overview-controls">
+					<button class="material-symbols" title="Previous day" id="day-prev">arrow_left</button>
+					<div class="overview-date-controls">
+						<input type="date" id="start-date-selector"/>
+						<input type="number" id="date-range-selector" value="1"/>
+					</div>
+					<button class="material-symbols" title="Next day" id="day-next">arrow_right</button>
+				</div>
 				<div class="note-controls">
 					<button class="material-symbols">pinboard</button>
 					<input class="search-box" type="text" placeholder="Search...">

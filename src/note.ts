@@ -10,8 +10,8 @@ export class Note {
 	isUnsaved: boolean;
 
 	constructor(title: string) {
-		this.id = NoteUtils.slugify(title);
 		this.title = title;
+		this.id = NoteUtils.slugify(title);
 	}
 
 	public async loadFromFile(): Promise<void> {

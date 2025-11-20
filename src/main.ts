@@ -1,9 +1,11 @@
 import { Entry } from "./entry";
 import { Note } from "./note";
 import { NoteUtils } from "./note-utils";
+import { Overview } from "./overview";
 
 class Manager {
 	notes: Note[] = [];
+	overview: Overview;
 	activeNoteIndex: number;
 	userSettings = {
 		indentString: "\t",
@@ -12,24 +14,91 @@ class Manager {
 	};
 	logInput: HTMLTextAreaElement;
 	currentIndentationLevel: number = 0;
+	
 	public constructor() {
 		this.logInput = document.getElementById("log-input") as HTMLTextAreaElement;
 		
-		this.initialiseNote();
+		this.initialiseNotes();
+		this.overview = this.initialiseOverview();
 		this.initialiseInput();
 		// TODO: Also store and fetch user settings
 		// TODO: Also cache and load data
+		this.setCurrentNote(this.notes[this.notes.length - 1].id);
 	}
 
-	private initialiseNote() {
+	private initialiseNotes() {
+		
 		// TODO: Load a note from the dang cache
 		// Also the overview is in Notes
 		this.notes.push(new Note("Note 1"));
 		this.activeNoteIndex = 0;
+
+		const noteTabsContainer = document.getElementById("note-tabs") as HTMLDivElement;
+		noteTabsContainer.innerHTML = "";
+		for (const note of this.notes) {
+			const radioElement: HTMLInputElement = document.createElement("input");
+			radioElement.type = "radio";
+			radioElement.id = note.id;
+			radioElement.name = "note-tabs";
+			radioElement.classList.add("tab-input");
+
+			const labelElement: HTMLLabelElement = document.createElement("label");
+			labelElement.classList.add("tab-label");
+			labelElement.htmlFor = note.id;
+			labelElement.textContent = note.title;
+
+			noteTabsContainer.appendChild(radioElement);
+			noteTabsContainer.appendChild(labelElement);
+		}
 		// STUB FUNCTION
+
+		// <input type="radio" id="tab1" name="note-tabs" class="tab-input">
+		// 		<label class="tab-label" for="tab1">Note 1</label>
+	}
+
+	private initialiseOverview(): Overview {
+		const overview = new Overview([]);
+		let allEntries = [];
+		for (const note of this.notes) {
+			allEntries.push(...note.entries);
+		}
+		overview.updateEntries(allEntries);
+		this.notes.unshift(overview);
+
+		return overview;
 	}
 
 	private initialiseInput() {
+		const noteTabsContainer = document.getElementById("sidebar") as HTMLFormElement;
+		noteTabsContainer.addEventListener("click", (e) => {
+			const target = e.target as HTMLElement;
+			if (target.className == "tab-input") {
+				this.setCurrentNote(target.id);
+				
+				const debug = e.target as HTMLInputElement;
+			}
+			
+		});
+
+		const overviewDateSelector = document.getElementById("start-date-selector") as HTMLInputElement;
+		overviewDateSelector.min = this.overview.earliestDate;
+		overviewDateSelector.addEventListener("change", (e) => {
+			const newDate = new Date(overviewDateSelector.value);
+			this.overview.updateSelectedDate(newDate);
+		});
+
+		const overviewDateRangeSelector = document.getElementById("date-range-selector");
+
+		const overviewDayPrev = document.getElementById("day-prev") as HTMLButtonElement;
+		const overviewDayNext = document.getElementById("day-next") as HTMLButtonElement;
+
+		overviewDayPrev.addEventListener("click", (e) => {
+			overviewDayPrev.disabled = this.overview.stepBackward();
+		});
+
+		overviewDayNext.addEventListener("click", (e) => { overviewDayNext.disabled = this.overview.stepForward(); });
+
+
 		const entriesContainer = document.getElementById("entry-container") as HTMLDivElement;
 
 		entriesContainer.addEventListener("click", (e) => {
@@ -84,15 +153,17 @@ class Manager {
 		
 		const entriesContainer = document.getElementById("entry-container") as HTMLDivElement;
 		entriesContainer.innerHTML = "";
-
+		
 		let entries = this.notes[this.activeNoteIndex].entries;
+
+		if (entries.length == 0) return;
+		
 		let groupedEntries: Array<Entry> = [this.notes[this.activeNoteIndex].entries[0]];
 		for (const entry of entries) {
 			if (entry.groupId > groupedEntries[groupedEntries.length - 1].groupId) {
 				groupedEntries.push(entry);
 			}
 		}
-		
 		for (let groupId = 0; groupId < groupedEntries.length; groupId++) {
 			const entry = groupedEntries[groupId];
 
@@ -124,10 +195,7 @@ class Manager {
 
 			for (let i = 0; i < splitLines.length; i++) {
 				const line: string = splitLines[i];
-
 				const currentIndentationLevel: number = this.countLeadingTabs(line);
-				console.log("current indentation level: "+currentIndentationLevel);
-				console.log("line that was checked: '"+line+"'")
 				const text: string = this.stripLeadingTabs(line);
 
 				let hasChildren = false;
@@ -137,7 +205,7 @@ class Manager {
 						hasChildren = true;
 					}
 				}
-
+				
 				const entryTextDiv = document.createElement("div");
 				entryTextDiv.classList.add("entry-text");
 
@@ -170,6 +238,27 @@ class Manager {
 		}
 	}
 
+	private setCurrentNote(noteId: string) {
+		const overviewControls = document.getElementById("overview-controls") as HTMLDivElement;
+		if (this.activeNoteIndex == 0) {
+			overviewControls.classList.remove("show");
+		}
+
+		this.activeNoteIndex = this.notes.findIndex(note => note.id === noteId);
+
+		if (!this.notes[this.activeNoteIndex]) return; // TODO
+
+		const noteTitle = document.getElementById("note-title");
+		noteTitle.textContent = this.notes[this.activeNoteIndex].title;
+		
+		if (this.activeNoteIndex == 0) {
+			overviewControls.classList.add("show");
+			this.updateOverview();
+		}
+
+		this.displayCurrentEntries();
+	}
+
 	private insertNewLine() {
 		const lines = this.logInput.value.split('\n');
 		const currentLine = lines[lines.length - 1];
@@ -190,6 +279,7 @@ class Manager {
 		const entryText = this.logInput.value;
 		if (entryText.trim().length == 0) return;
 		if (this.activeNoteIndex == null) return; // TODO
+
 		const note = this.notes[this.activeNoteIndex];
 		const currentTime = new Date();
 		let groupId = 0;
@@ -204,17 +294,27 @@ class Manager {
 		
 		const splitLines = entryText.split('\n');
 		const indentLevel = this.countLeadingTabs(splitLines[splitLines.length - 1]);
-		console.log("New entry indent level: "+indentLevel);
 		const newEntry = new Entry(note.entries ? note.entries.length : 0, groupId, entryText, currentTime, indentLevel);
 		note.addEntry(newEntry);
 
 		// TODO: Verify that the entry was submitted before clearing textarea
 		
 		this.logInput.value = (this.userSettings.indentString).repeat(indentLevel);
-		console.log( (this.userSettings.indentString).repeat(indentLevel));
 		this.updateLogInputHeight();
 
+		if (this.activeNoteIndex == 0) this.updateOverview();
+
 		this.displayCurrentEntries();
+	}
+
+	private updateOverview() {
+		let allEntries = [];
+		this.overview.clearEntries();
+		for (const note of this.notes) {
+			allEntries.push(...note.entries);
+		}
+		this.overview.updateEntries(allEntries);
+		this.overview.updateEntriesShown();
 	}
 
 	private loadAllNotes() {

@@ -64,6 +64,12 @@ button:hover {
 	cursor: pointer;
 }
 
+button:disabled {
+	color: var(--c-dim-alt);
+	background-color: var(--c-background);
+	pointer-events: none;
+}
+
 input, textarea {
 	padding-left: calc(2 * var(--spacing));
 	font-family: Verdana, Geneva, Tahoma, sans-serif;
@@ -90,7 +96,7 @@ div {
 	height: 100%;
 }
 
-.sidebar {
+#sidebar {
 	float: left;
 	width: 8vw;
 	display: flex;
@@ -101,11 +107,11 @@ div {
 	overflow-y: scroll;
 }
 
-.sidebar::-webkit-scrollbar {
+#sidebar::-webkit-scrollbar {
 	display: none;
 }
 
-.sidebar, .note-tabs {
+#sidebar, .note-tabs {
 	margin: 0;
 	padding: 0;
 	display: flex;
@@ -154,19 +160,33 @@ div {
 	right: calc(calc(var(--border-thickness) * -1) - 1px);
 }
 
-#daily-note-tab {
+#overview-tab {
 	padding-top: 3vh;
 	padding-bottom: 3vh;
 	text-align: center;
 	padding-left: 0;
 }
 
-#daily-note-tab .material-symbols {
+#overview-tab:hover {
+	background-color: var(--c-background);
+	cursor: pointer;
+}
+
+#overview-tab.input:checked + {
+	cursor: default;
+	background-color: var(--c-background);
+}
+
+#overview-tab .material-symbols {
 	font-size: 200%;
 }
 
+#overview-tab .tab-input {
+	display: none;
+}
+
 #add-note-tab {
-	padding-left: 1.5vh;
+	padding-left: 0.75vh;
 	display: flex;
 	flex-direction: row;
 	align-items: center;
@@ -200,7 +220,7 @@ div {
 	height: 6vh;
 }
 
-.note-title {
+#note-title {
 	margin-left: var(--indentation);
 	font-size: 125%;
 	vertical-align: middle;
@@ -214,6 +234,51 @@ div {
 .note-controls button {
 	height: calc(6vh - var(--spacing));
 	width: calc(6vh - var(--spacing));
+}
+
+.overview-controls {
+	display: none;
+}
+
+.overview-controls.show {
+	display: flex;
+	gap: var(--spacing);
+	justify-content: space-between;
+	width: 50%;
+	align-items: center;
+}
+
+.overview-date-controls {
+	display: flex;
+	width:max-content;
+	gap: var(--spacing);
+}
+
+#start-date-selector {
+	color: var(--c-text);
+	display: inline-flex;
+	width: 9vw;
+	font-size: 85%;
+	cursor: pointer;
+}
+
+#start-date-selector::after { /* Replace the regular calendar icon with one from the same icon library */
+	position: relative;
+	font-family: "Material Symbols";
+	content: "date_range";
+	pointer-events: none;
+	font-size: 150%;
+	right: -10px; /* TODO: Does this need to be a different value/unit */
+	margin-right: calc(var(--spacing) / 2);
+}
+
+#start-date-selector::-webkit-inner-spin-button,
+#start-date-selector::-webkit-calendar-picker-indicator {
+	opacity: 0;
+}
+
+#date-range-selector {
+	width: calc(var(--logbox-min-height) + 1vw);
 }
 
 .entry {

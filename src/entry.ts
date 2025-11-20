@@ -17,6 +17,18 @@ export class Entry {
 		if (lastEdited) if (lastEdited.getTime() != new Date(0).getTime())this.lastEdited = lastEdited; // Similarly, an undefined lastEdited is stored as 0000... (because 1111... would be too large for JS to handle)
 	}
 
+	public static fromPartial(partial: Partial<Entry> & { id: number; groupId: number; text: string; created: Date; indentLevel: number }): Entry {
+        return new Entry(
+            partial.id,
+            partial.groupId,
+            partial.text,
+            partial.created,
+            partial.indentLevel,
+			partial.lastEdited,
+            partial.quotedId,
+        );
+    }
+
 	public toBinary(): ArrayBuffer {
 		const textBytes = new TextEncoder().encode(this.text);
 		const textLength = textBytes.byteLength;

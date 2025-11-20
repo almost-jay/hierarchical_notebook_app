@@ -9,12 +9,12 @@ export class Overview extends Note {
 	aggregatedEntries: EntriesByDay;
 	selectedNoteId?: string;
 
-	constructor(allEntries: Entry[]) {
+	constructor(allEntries: EntryWithSource[]) {
 		super("Overview"); // Creates a note with the hard-set title "overview"
 		this.id = "."+this.id; // force a . in front of title for file reasons
 		this.currentDate = DateRange.convertFromDate(new Date());
 		this.selectedDateRange = new DateRange(new Date());
-		this.aggregatedEntries = Overview.collateNotes(allEntries);
+		this.aggregatedEntries = Overview.collateEntries(allEntries);
 		this.earliestDate = Object.keys(this.aggregatedEntries).sort()[0] || this.currentDate;
 	}
 
@@ -27,9 +27,13 @@ export class Overview extends Note {
 		this.entries = [];
 	}
 
-	updateEntries(allEntries: Entry[]) { // Collects all entries and parses them
-		allEntries.push(...this.overviewEntries);
-		this.aggregatedEntries = Overview.collateNotes(allEntries);
+	updateEntries(allEntries: EntryWithSource[]) { // Collects all entries and parses them
+		this.overviewEntries.forEach(entry => {
+			const newEntryWrapper: EntryWithSource = { entry: entry, sourceNoteId: this.id };
+			allEntries.push(newEntryWrapper); // Adds its own entries to the collated entry thing
+		});
+		//console.log(allEntries);
+		this.aggregatedEntries = Overview.collateEntries(allEntries);
 	}
 
 	updateEntriesShown() { // Actually figures out what to display
@@ -73,15 +77,42 @@ export class Overview extends Note {
 			return false;
 		}
 	}
-	
-	static collateNotes(allEntries: Entry[]): EntriesByDay {
-		let aggregatedEntries: EntriesByDay = {};
-		for (const entry of allEntries) {
-			const key = DateRange.convertFromDate(entry.created);
-			if (!aggregatedEntries[key]) aggregatedEntries[key] = [];
-			aggregatedEntries[key].push(entry);
+
+	static collateEntries(allEntries: EntryWithSource[]): EntriesByDay {
+		const sortedEntries = [...allEntries].sort((a, b) =>
+			a.entry.created.getTime() - b.entry.created.getTime()
+		);
+		console.log(sortedEntries);
+		const aggregatedEntries: EntriesByDay = {};
+		let nextDisplayGroupId = -1;
+		let previousEntryWrapper: EntryWithSource | null = null;
+
+		for (const entryWrapper of sortedEntries) {
+			const currentEntry = entryWrapper.entry;
+			const day = DateRange.convertFromDate(entryWrapper.entry.created);
+			if (!aggregatedEntries[day]) aggregatedEntries[day] = [];
+
+			let isNewGroup = false;
+
+			if (!previousEntryWrapper) {
+				isNewGroup = true;
+			} else {
+				const previousEntry = previousEntryWrapper.entry;
+				
+				if (entryWrapper.sourceNoteId != previousEntryWrapper.sourceNoteId || currentEntry.groupId != previousEntry.groupId) {
+					isNewGroup = true;
+				}
+			}
+
+			const clonedEntry: Entry = Entry.fromPartial({...currentEntry});
+			if (isNewGroup) nextDisplayGroupId++;
+			clonedEntry.groupId = nextDisplayGroupId;
+
+			aggregatedEntries[day].push(clonedEntry);
+			previousEntryWrapper = entryWrapper;
 		}
-		return aggregatedEntries;
+		console.log(aggregatedEntries);
+		return aggregatedEntries
 	}
 }
 
@@ -125,4 +156,9 @@ class DateRange {
 
 interface EntriesByDay {
 	[yyyyMMdd: string]: Entry[];
+}
+
+export interface EntryWithSource {
+	entry: Entry;
+	sourceNoteId: string;
 }

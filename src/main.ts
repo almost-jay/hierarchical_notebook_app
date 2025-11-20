@@ -2,6 +2,7 @@ import { Entry } from "./entry";
 import { Note } from "./note";
 import { NoteUtils } from "./note-utils";
 import { Overview } from "./overview";
+import { ToastManager } from "./toast-manager";
 
 // CHECK: remove plugin dialog? remove rust code?
 
@@ -13,12 +14,15 @@ class Manager {
 		indentString: "\t",
 		groupInterval: 5, // minutes
 		noteIndexFileName: ".note_headings",
+		toastDuration: 3000, //ms
 	};
 	logInput: HTMLTextAreaElement;
 	persistentTextInput: HTMLTextAreaElement;
 	currentIndentationLevel: number = 0;
+	toastManager: ToastManager;
 
 	public constructor() {
+		this.toastManager = new ToastManager(this.userSettings.toastDuration);
 		this.logInput = document.getElementById("log-input") as HTMLTextAreaElement;
 		this.persistentTextInput = document.getElementById("persistent-text-input") as HTMLTextAreaElement;
 
@@ -376,11 +380,11 @@ class Manager {
 
 					this.addNewNote(title, created, saved);
 				} else {
-					// Display a little toast thing here to say "Failed to load ${noteId}"
+					this.toastManager.show("error",`Could not find file ${noteId}.md`);
 				}
 			}
 		} else { 
-			// We will not create any notes.
+			this.toastManager.show("error",`Could not find headings file ${this.userSettings.noteIndexFileName}.md`);
 		}
 	}
 

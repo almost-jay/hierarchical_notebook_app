@@ -1,15 +1,27 @@
-import { appDataDir } from "@tauri-apps/api/path";
+import { appDataDir, BaseDirectory, join } from "@tauri-apps/api/path";
 import { exists, readFile, readTextFile, writeFile, writeTextFile } from "@tauri-apps/plugin-fs";
 
 export class NoteUtils {
 	static slugify(text: string): string {
-		return text
-				.toLowerCase()
-				.trim()
-				.normalize("NFD")
-				.replace(/[^a-z0-9]+/g, "-") // Replaces non-alphanumeric characters with hyphens
-				.replace(/^-+|-+$/g, "") // Removes leading/trailing hyphens
+		const maxLength = 60;
+		let slug = text
+			.toLowerCase()
+			.trim()
+			.normalize("NFD")
+			.replace(/[\u0300-\u036f]/g, "")
+			.replace(/[^a-z0-9]+/g, "-")
+			.replace(/^-+|-+$/g, "");
+
+		if (slug.length <= maxLength) return slug;
+
+		const cutoff = slug.lastIndexOf("-", maxLength);
+		if (cutoff > 0) {
+			return slug.slice(0, cutoff);
+		}
+
+		return slug.slice(0, maxLength);
 	}
+
 
 	static shiftSelectedText(text: string, start: number, end: number, offset: number): string {
 		const lines = text.split('\n');
@@ -33,35 +45,25 @@ export class NoteUtils {
 	}
 
 	public static async getMarkdownFile(filename: string): Promise<string> {
-		const dir = await appDataDir();
-		const path = `${dir}/${filename}`;
-		const content = await readTextFile(path);
+		const content = await readTextFile(`${filename}.md`, { baseDir: BaseDirectory.AppData } );
 		return content;
 	}
 
 	public static async writeMarkdownFile(filename: string, content: string): Promise<void> {
-		const dir = await appDataDir();
-		const path = `${dir}/${filename}.md`;
-		//await writeTextFile(path, content);
+		await writeTextFile(`${filename}.md`, content, { baseDir: BaseDirectory.AppData } );
 	}
 
 	public static async getBinaryFile(filename: string): Promise<ArrayBuffer> {
-		const dir = await appDataDir();
-		const path = `${dir}/${filename}`;
-		const contentRaw = await readFile(filename);
+		const contentRaw = await readFile(`${filename}.bin`, { baseDir: BaseDirectory.AppData } );
 		return contentRaw.buffer;
 	}
 
 	public static async writeBinaryFile(filename: string, content: Uint8Array): Promise<void> {
-		const dir = await appDataDir();
-		const path = `${dir}/${filename}.bin`;
-		await writeFile(path, content);
+		await writeFile(`${filename}.bin`, content, { baseDir: BaseDirectory.AppData } );
 	}
 
 	public static async doesFileExist(filename: string): Promise<boolean> {
-		const dir = await appDataDir();
-		const path = `${dir}/${filename}`;
-		const result = await exists(path);
+		const result = await exists(filename, { baseDir: BaseDirectory.AppData });
 		return result;
 	}
 

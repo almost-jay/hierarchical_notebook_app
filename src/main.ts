@@ -13,7 +13,7 @@ class Manager {
 	userSettings = {
 		indentString: "\t",
 		groupInterval: 5, // minutes
-		noteIndexFileName: ".note_headings",
+		noteIndexFileName: ".note-headings",
 		toastDuration: 3000, //ms
 	};
 	logInput: HTMLTextAreaElement;
@@ -32,7 +32,6 @@ class Manager {
 		this.initialiseInput();
 		// TODO: Also store and fetch user settings
 		// TODO: Also cache and load data
-		this.setCurrentNote(this.notes[Math.min(this.notes.length - 1,1)].id);
 	}
 
 	private initialiseNotes() {
@@ -153,6 +152,8 @@ class Manager {
 
 	private displayCurrentEntries() {
 		if (this.activeNoteIndex == null) return; // TODO
+		
+		this.updateNoteTitleDisplay();
 
 		const entriesContainer = document.getElementById("entry-container") as HTMLDivElement;
 		entriesContainer.innerHTML = "";
@@ -248,8 +249,7 @@ class Manager {
 
 		if (!this.notes[this.activeNoteIndex]) return; // TODO
 
-		const noteTitle = document.getElementById("note-title");
-		noteTitle.textContent = (this.notes[this.activeNoteIndex].isUnsaved ? "* " : "") + this.notes[this.activeNoteIndex].title; // CHECK: Would this work better as an .unsaved class with ::before and color: var(--text-alt)
+		this.updateNoteTitleDisplay();
 
 		if (this.activeNoteIndex == 0) {
 			overviewControls.classList.add("show");
@@ -263,23 +263,40 @@ class Manager {
 		this.displayCurrentEntries();
 	}
 
-	private addNewNote(noteTitle: string, created?: Date, lastEdited?: Date) { // TODO: make sure there is enough space for the note?
-		const newNote = new Note(noteTitle, created, lastEdited);
+	private addNewNote(noteTitle: string): Note { // TODO: make sure there is enough space for the note?
+		const newNote = new Note(noteTitle);
 		this.notes.push(newNote);
 		this.activeNoteIndex = this.notes.length - 1;
 
+		this.addNoteElements(newNote);
+
+		return newNote;
+	}
+
+	private updateNoteTitleDisplay() {
+		if (!this.notes[this.activeNoteIndex]) return;
+		const noteTitle = document.getElementById("note-title");
+		const isUnsaved = this.isCurrentNoteUnsaved();
+		noteTitle.textContent = (isUnsaved ? "* " : "") + this.notes[this.activeNoteIndex].title; // CHECK: Would this work better as an .unsaved class with ::before and color: var(--text-alt)
+	}
+
+	private isCurrentNoteUnsaved(): boolean {
+		return this.notes[this.activeNoteIndex].isPersistentTextUnsaved || this.notes[this.activeNoteIndex].isEntriesUnsaved;
+	}
+
+	private addNoteElements(note: Note) {
 		const noteTabsContainer = document.getElementById("note-tabs") as HTMLDivElement;
 
 		const radioElement: HTMLInputElement = document.createElement("input");
 		radioElement.type = "radio";
-		radioElement.id = newNote.id;
+		radioElement.id = note.id;
 		radioElement.name = "note-tabs";
 		radioElement.classList.add("tab-input");
 
 		const labelElement: HTMLLabelElement = document.createElement("label");
 		labelElement.classList.add("tab-label");
-		labelElement.htmlFor = newNote.id;
-		labelElement.textContent = newNote.title;
+		labelElement.htmlFor = note.id;
+		labelElement.textContent = note.title;
 
 		noteTabsContainer.appendChild(radioElement);
 		noteTabsContainer.appendChild(labelElement);
@@ -309,6 +326,7 @@ class Manager {
 		if (!this.notes[this.activeNoteIndex]) return;
 
 		this.notes[this.activeNoteIndex].updatePersistentTextContent(this.persistentTextInput.value);
+		this.updateNoteTitleDisplay();
 	}
 
 	private submitEntry() {
@@ -349,7 +367,7 @@ class Manager {
 		this.updateLogInputHeight();
 
 		if (this.activeNoteIndex == 0) this.updateOverview();
-
+		
 		this.displayCurrentEntries();
 	}
 
@@ -368,28 +386,29 @@ class Manager {
 	private async loadAllNotes() {
 		// Check if the headings file exists
 		// If it does, we will add new notes
-
-		if (NoteUtils.doesFileExist(this.userSettings.noteIndexFileName)) {
-			const noteIdList: String[] = (await NoteUtils.getMarkdownFile(this.userSettings.noteIndexFileName)).split("\n");
-			for (const noteId in noteIdList) {
-				if (await NoteUtils.doesFileExist(noteId)) {
-					const fileText: string = await NoteUtils.getMarkdownFile(noteId);
-					const title = fileText.match(/title:\s*(.+)/)?.[1] ?? "";
-					const created = new Date(Number(fileText.match(/created:\s*(\d+)/)?.[1] ?? "0"));
-  					const saved = new Date(Number(fileText.match(/saved:\s*(\d+)/)?.[1] ?? "0"));
-
-					this.addNewNote(title, created, saved);
-				} else {
-					this.toastManager.show("error",`Could not find file ${noteId}.md`);
-				}
+		const notesAdded = [];
+		if (await NoteUtils.doesFileExist(this.userSettings.noteIndexFileName+".md")) {
+			this.toastManager.show("info",`Loading notes from ${this.userSettings.noteIndexFileName}.md`);
+			const noteIdList: string[] = (await NoteUtils.getMarkdownFile(this.userSettings.noteIndexFileName)).split("\n");
+			for (const noteId of noteIdList) {
+				if (noteId == "") continue;
+				console.log(noteId);
+				const newNote = await Note.loadFromFile(noteId);
+				this.notes.push(newNote);
+				notesAdded.push(newNote.id);
+				this.addNoteElements(newNote);
+				
 			}
 		} else { 
 			this.toastManager.show("error",`Could not find headings file ${this.userSettings.noteIndexFileName}.md`);
 		}
+
+		this.setCurrentNote(notesAdded[0]);
+		this.updateNoteTitleDisplay();
 	}
 
 	private async saveNotes(saveAll: boolean = false) {
-		if (!saveAll && this.activeNoteIndex == 0) return;
+		if (!(saveAll || this.isCurrentNoteUnsaved())) return; //!A!B
 		let noteHeadings = "";
 		for (let i = 1; i < this.notes.length; i++) {
 			const note = this.notes[i];
@@ -398,16 +417,18 @@ class Manager {
 			if (saveAll) await note.save();
 
 		}
-		
-		if (!saveAll) await this.notes[this.activeNoteIndex].save();
-		this.setCurrentNote(this.notes[this.activeNoteIndex].id);
-		await NoteUtils.writeMarkdownFile(this.userSettings.noteIndexFileName,noteHeadings);
+		console.log(this.activeNoteIndex);
+		if (!saveAll) {
+			const result = await this.notes[this.activeNoteIndex].save();
+			console.log(result);
+			if (result) {
+				this.toastManager.show("info",`Saved as ${this.notes[this.activeNoteIndex].id}.md`);
+				await NoteUtils.writeMarkdownFile(this.userSettings.noteIndexFileName,noteHeadings);
+			}
+		}
+		this.updateNoteTitleDisplay();
 	}
-
-	private async writeHeadingsFile() {
-
-	}
-
+	
 	countLeadingTabs(line): number {
 		return line.match(new RegExp(`^${this.userSettings.indentString}+`))?.[0].length || 0;
 

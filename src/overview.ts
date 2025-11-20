@@ -16,7 +16,8 @@ export class Overview extends Note {
 		this.selectedDateRange = new DateRange(new Date());
 		this.aggregatedEntries = Overview.collateEntries(allEntries);
 		this.earliestDate = Object.keys(this.aggregatedEntries).sort()[0] || this.currentDate;
-		this.isUnsaved = false;
+		this.isPersistentTextUnsaved = false;
+		this.isEntriesUnsaved = false;
 	}
 
 	public addEntry(newEntry: Entry): void {

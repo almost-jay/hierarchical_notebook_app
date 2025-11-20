@@ -6,9 +6,15 @@
     "main"
   ],
   "permissions": [
-    "core:default",
-    "opener:default",
-    "fs:default",
-    "dialog:default"
-  ]
+  "core:default",
+  "opener:default",
+  "dialog:default",
+  "fs:allow-exists",
+  "fs:allow-appdata-read",
+  "fs:allow-appdata-write",
+  "fs:allow-config-read",
+  "fs:allow-cache-read",
+  "fs:allow-cache-write"
+]
+
 }

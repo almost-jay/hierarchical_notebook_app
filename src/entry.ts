@@ -42,9 +42,9 @@ export class Entry {
 		dataView.setUint8(6, this.indentLevel);
 		dataView.setBigUint64(7, BigInt(this.created.getTime()));
 		dataView.setBigUint64(16, this.lastEdited ? BigInt(this.lastEdited.getTime()) : 0n);
-		dataView.setUint16(23, textLength);
+		dataView.setUint16(23, textLength); 
 		
-		new Uint8Array(buffer, 25 + textLength, textLength).set(textBytes);
+		new Uint8Array(buffer, 25, textLength).set(textBytes);
 		
 		return buffer;
 	}

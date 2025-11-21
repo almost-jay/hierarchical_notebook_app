@@ -16,6 +16,7 @@ export class Overview extends Note {
 		this.currentDate = DateRange.convertFromDate(new Date());
 		this.selectedDateRange = new DateRange(new Date())
 		this.isPersistentTextUnsaved = false;
+		this.isEntriesUnsaved = false;
 		this.isTitleSet = true;
 	}
 

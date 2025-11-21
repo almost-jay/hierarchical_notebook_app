@@ -13,6 +13,7 @@ class Manager {
 		groupInterval: 5, // minutes
 		noteIndexFileName: '.note-headings',
 		toastDuration: 3000, //ms
+		dragHandleWidth: 20, //px
 	};
 	private noteTabsContainer: HTMLDivElement;
 	private logInput: HTMLTextAreaElement;
@@ -58,6 +59,7 @@ class Manager {
 
 	private initialiseInput(): void {
 		window.addEventListener('keydown', (e) => {
+			if (this.draggedTab) return;
 			if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() == 's') {
 				e.preventDefault();
 				this.saveNotes(e.shiftKey); // Saves all notes on Ctrl + Shift + S, and just the active one on Ctrl + S
@@ -69,16 +71,58 @@ class Manager {
 		});
 
 		this.persistentTextInput.addEventListener('keyup', (e) => {
+			if (this.draggedTab) return;
 			if (e.key == ' ' || e.key == 'Enter') this.updatePersistentText();
 		});
 				
 		const sidebar = document.getElementById('sidebar') as HTMLFormElement;
 		sidebar.addEventListener('click', (e) => {
+			if (this.draggedTab) return;
 			const target = e.target as HTMLElement;
 			if (target.className == 'tab-input') {
 				this.setCurrentNote(target.id);
 			}
 
+		});
+
+		this.noteTabsContainer.addEventListener('mousedown', (e) => {
+			if (e.clientX > this.userSettings.dragHandleWidth) return;
+			
+			const targetTab: HTMLDivElement = (e.target as HTMLElement).closest('.tab');
+			if (!targetTab) return;
+			this.draggedTab = targetTab;
+			this.draggedTab.classList.add('dragging');
+			document.body.style.userSelect = 'none';
+    		document.body.style.webkitUserSelect = 'none';
+		});
+
+		window.addEventListener('mouseup', () => {
+			if (!this.draggedTab) return;
+			
+			this.draggedTab.classList.remove('dragging');
+			this.draggedTab = null;
+			document.body.style.userSelect = '';
+    		document.body.style.webkitUserSelect = '';
+
+		});
+
+		this.noteTabsContainer.addEventListener('mousemove', (e: MouseEvent) => {
+			if (!this.draggedTab) return;
+
+			const tabs = Array.from(this.noteTabsContainer.querySelectorAll('.tab')).filter(t => t !== this.draggedTab);
+			let inserted = false;
+
+			for (const tab of tabs) {
+				const rect = tab.getBoundingClientRect();
+				if (e.clientY < rect.top + rect.height / 2) {
+					this.noteTabsContainer.insertBefore(this.draggedTab, tab);
+					inserted = true;
+					break;
+				}
+			}
+
+			if (!inserted) this.noteTabsContainer.appendChild(this.draggedTab);
+			
 		});
 
 		const addNotetab = document.getElementById('add-note-tab') as HTMLDivElement;
@@ -293,21 +337,19 @@ class Manager {
 	}
 
 	private updateNoteTitleDisplay(): void {
-		if (!this.notes[this.activeNoteIndex]) return;
-		const noteTitle = document.getElementById('note-title');
+		if (!this.notes[this.activeNoteIndex]) return; // CHECK: Should we display a save indicator for the Overview as well?
+		
 		const isUnsaved = this.notes[this.activeNoteIndex].isUnsaved();
-		noteTitle.textContent = (isUnsaved ? '* ' : '') + this.notes[this.activeNoteIndex].title; // CHECK: Would this work better as an .unsaved class with ::before and color: var(--text-alt)
+		const noteTitle = document.getElementById('note-title');
+		const noteLabel = document.querySelector(`label[for="${this.notes[this.activeNoteIndex].id}"]`);
+		noteTitle.textContent = (isUnsaved ? '* ' : '') + this.notes[this.activeNoteIndex].title;
+		if (this.activeNoteIndex > 0) noteLabel.textContent = (isUnsaved ? '* ' : '') + this.notes[this.activeNoteIndex].title;
 	}
 
 
 	private addNoteElements(note: Note): void {
 		const noteTabDiv = document.createElement('div');
 		noteTabDiv.classList.add('tab');
-		noteTabDiv.draggable = true;
-
-		noteTabDiv.addEventListener('dragstart', this.tabDragStartHandler);
-		noteTabDiv.addEventListener('dragover', this.tabDragOverHandler);
-		noteTabDiv.addEventListener('dragend', this.tabDragEndHandler);
 
 		const radioElement: HTMLInputElement = document.createElement('input');
 		radioElement.type = 'radio';
@@ -326,35 +368,6 @@ class Manager {
 
 		radioElement.checked = true;
 		this.logInput.focus();
-	}
-
-	private tabDragStartHandler(event: DragEvent): void {
-		console.log(event.currentTarget);
-		this.draggedTab = event.currentTarget as HTMLDivElement;
-		this.draggedTab.classList.add('dragging');
-	}
-
-	private tabDragOverHandler(event: DragEvent): void {
-		event.preventDefault();
-		console.log('DRAG OVER!!');
-		if (!this.draggedTab) return;
-		console.log(event.currentTarget);
-		const target = event.currentTarget as HTMLElement;
-
-		const rect = target.getBoundingClientRect();
-		const isAfter = event.clientY > rect.top + rect.height / 2;
-
-		target.parentNode!.insertBefore(this.draggedTab, isAfter ? target.nextSibling : target);
-
-		if (target == this.draggedTab) return;
-	}
-
-	private tabDragEndHandler(): void {
-		if (!this.draggedTab) return;
-		console.log(this.draggedTab);
-		this.draggedTab.classList.remove('dragging');
-		this.draggedTab = null;
-
 	}
 
 	private insertNewLine(): void {
@@ -497,6 +510,7 @@ type UserSettings = {
 	groupInterval: number;
 	noteIndexFileName: string;
 	toastDuration: number;
+	dragHandleWidth: number;
 };
 
 const _manager = new Manager();

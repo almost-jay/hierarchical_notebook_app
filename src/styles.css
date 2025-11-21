@@ -118,6 +118,7 @@ div {
 	justify-content: start;
 	align-items: stretch;
 	overflow-y: scroll;
+	overflow-x: hidden;
 }
 
 #sidebar::-webkit-scrollbar {
@@ -139,10 +140,13 @@ div {
 .tab {
 	padding: 0;
 	margin: 0;
+	transform: translateX(0%);
+	transition: 0.2s transform;
 }
 
 .tab:not(:only-of-type) {
 	cursor: grab;
+	pointer-events: all;
 }
 
 .tab:not(:only-of-type) > .tab-label::before {
@@ -155,6 +159,14 @@ div {
 
 .tab.dragging {
 	opacity: 0.5;
+	transform: translateX(10%);
+	transition: 0.2s transform;
+}
+
+.tab.dragging * {
+	pointer-events: none;
+	user-select: none;
+	-webkit-user-select: none;
 }
 
 .tab-input {

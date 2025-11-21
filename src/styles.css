@@ -136,6 +136,27 @@ div {
 	margin-bottom: 2vh;
 }
 
+.tab {
+	padding: 0;
+	margin: 0;
+}
+
+.tab:not(:only-of-type) {
+	cursor: grab;
+}
+
+.tab:not(:only-of-type) > .tab-label::before {
+	font-family: "Material Symbols";
+	content: "drag_indicator";
+	color: var(--c-dim);
+	font-size: 120%;
+	margin-right: var(--spacing);
+}
+
+.tab.dragging {
+	opacity: 0.5;
+}
+
 .tab-input {
 	display: none;
 }
@@ -144,11 +165,13 @@ div {
 	flex-basis: var(--tab-height);
 	background-color: var(--c-background-alt);
 	padding: var(--spacing);
-	padding-left: 1vw; /* Need to make sure it won't be too close to the edge of the screen */
-	display: block;
+	display: flex;
 	position: relative;
+	align-items: center;
 	user-select: none;
+	-webkit-user-select: none;
 }
+
 
 .tab-label:hover {
 	background-color: var(--c-background);
@@ -178,6 +201,7 @@ div {
 	padding-bottom: 3vh;
 	text-align: center;
 	padding-left: 0;
+	display: block;
 }
 
 #overview-tab:hover {

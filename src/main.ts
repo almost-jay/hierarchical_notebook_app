@@ -4,8 +4,6 @@ import { NoteUtils } from './note-utils';
 import { Overview } from './overview';
 import { ToastManager } from './toast-manager';
 
-// CHECK: remove plugin dialog? remove rust code?
-
 class Manager {
 	private notes: Note[] = [];
 	private overview: Overview;
@@ -16,12 +14,16 @@ class Manager {
 		noteIndexFileName: '.note-headings',
 		toastDuration: 3000, //ms
 	};
+	private noteTabsContainer: HTMLDivElement;
 	private logInput: HTMLTextAreaElement;
 	private persistentTextInput: HTMLTextAreaElement;
 	private currentIndentationLevel: number = 0;
 	private toastManager: ToastManager;
 
+	private draggedTab: HTMLDivElement | null = null;
+
 	public constructor() {
+		this.noteTabsContainer = document.getElementById('note-tabs') as HTMLDivElement;
 		this.toastManager = new ToastManager(this.userSettings.toastDuration);
 		this.logInput = document.getElementById('log-input') as HTMLTextAreaElement;
 		this.persistentTextInput = document.getElementById('persistent-text-input') as HTMLTextAreaElement;
@@ -38,9 +40,8 @@ class Manager {
 
 		// TODO: Load a note from the dang cache
 		// Also the overview is in Notes
-		this.loadAllNotes();
-		const noteTabsContainer = document.getElementById('note-tabs') as HTMLDivElement;
-		noteTabsContainer.innerHTML = '';
+		this.loadAllNotes(); 
+		this.noteTabsContainer.innerHTML = '';
 		// FOR i in note
 		// do:
 		// uhhh render it or sum idfk
@@ -57,11 +58,13 @@ class Manager {
 
 	private initialiseInput(): void {
 		window.addEventListener('keydown', (e) => {
-			console.log(e);
-			if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+			if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() == 's') {
 				e.preventDefault();
-				console.log(e.shiftKey);
 				this.saveNotes(e.shiftKey); // Saves all notes on Ctrl + Shift + S, and just the active one on Ctrl + S
+			} else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
+				e.preventDefault();
+				this.addNewNote(`Untitled ${this.notes.length}`);
+				this.setCurrentNote(this.notes[this.notes.length - 1].id);
 			}
 		});
 
@@ -69,14 +72,43 @@ class Manager {
 			if (e.key == ' ' || e.key == 'Enter') this.updatePersistentText();
 		});
 				
-		const noteTabsContainer = document.getElementById('sidebar') as HTMLFormElement;
-		noteTabsContainer.addEventListener('click', (e) => {
+		const sidebar = document.getElementById('sidebar') as HTMLFormElement;
+		sidebar.addEventListener('click', (e) => {
 			const target = e.target as HTMLElement;
 			if (target.className == 'tab-input') {
 				this.setCurrentNote(target.id);
 			}
 
 		});
+
+		this.noteTabsContainer.addEventListener('dragstart', (e) => {
+			const targetTab: HTMLDivElement = (e.target as HTMLElement).closest('.tab');
+			if (!targetTab) return;
+			this.draggedTab = targetTab;
+			this.draggedTab.classList.add('dragging');
+			e.dataTransfer!.effectAllowed = 'move';
+		});
+
+		this.noteTabsContainer.addEventListener('dragend', () => {
+			if (this.draggedTab) {
+				this.draggedTab.classList.remove('dragging');
+				this.draggedTab = null;
+			}
+		});
+
+		this.noteTabsContainer.addEventListener('dragover', (e) => {
+			e.preventDefault();
+
+			if (!this.draggedTab) return;
+
+			const target = (e.target as HTMLElement).closest('.tab');
+			if (!target || target == this.draggedTab) return;
+
+			const rect = target.getBoundingClientRect();
+			const isAfter = e.clientY > rect.top + rect.height / 2;
+
+			this.noteTabsContainer.insertBefore(this.draggedTab, isAfter ? target.nextSibling : target);
+		})
 
 		const addNotetab = document.getElementById('add-note-tab') as HTMLDivElement;
 		addNotetab.addEventListener('click', (e) => {
@@ -298,7 +330,9 @@ class Manager {
 
 
 	private addNoteElements(note: Note): void {
-		const noteTabsContainer = document.getElementById('note-tabs') as HTMLDivElement;
+		const noteTabDiv = document.createElement('div');
+		noteTabDiv.classList.add('tab');
+		noteTabDiv.draggable = true;
 
 		const radioElement: HTMLInputElement = document.createElement('input');
 		radioElement.type = 'radio';
@@ -311,8 +345,9 @@ class Manager {
 		labelElement.htmlFor = note.id;
 		labelElement.textContent = note.title;
 
-		noteTabsContainer.appendChild(radioElement);
-		noteTabsContainer.appendChild(labelElement);
+		noteTabDiv.appendChild(radioElement);
+		noteTabDiv.appendChild(labelElement);
+		this.noteTabsContainer.appendChild(noteTabDiv);
 
 		radioElement.checked = true;
 		this.logInput.focus();
@@ -395,13 +430,15 @@ class Manager {
 			const noteIdList: string[] = (await NoteUtils.getMarkdownFile(this.userSettings.noteIndexFileName)).split('\n');
 			for (const noteId of noteIdList) {
 				if (noteId == '') continue;
-
+				
 				if (noteId == '.overview') {
 					const newOverview: Overview = await Overview.loadFromFile();
+					if (!newOverview) this.toastManager.show('error','Could not load Overview');
 					this.notes.unshift(newOverview)
 					this.overview = newOverview;
 				} else {
 					const newNote = await Note.loadFromFile(noteId);
+					if (!newNote) this.toastManager.show('error',`Could not load note ${noteId}`);
 					this.notes.push(newNote);
 					notesAdded.push(newNote.id);
 					this.addNoteElements(newNote);

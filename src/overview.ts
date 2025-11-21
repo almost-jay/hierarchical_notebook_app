@@ -64,7 +64,7 @@ export class Overview extends Note {
 		this.entries = [];
 	}
 
-	public updateEntries(allEntries: EntryWithSource[]) { // Collects all entries and parses them
+	public updateEntries(allEntries: EntryWithSource[]): void { // Collects all entries and parses them
 		this.overviewEntries.forEach(entry => {
 			const newEntryWrapper: EntryWithSource = { entry: entry, sourceNoteId: this.id };
 			allEntries.push(newEntryWrapper); // Adds its own entries to the collated entry thing
@@ -73,7 +73,7 @@ export class Overview extends Note {
 		this.updateEntriesShown();
 	}
 
-	private updateEntriesShown() { // Actually figures out what to display
+	private updateEntriesShown(): void { // Actually figures out what to display
 		this.clearEntries();
 		const startKey: string = this.selectedDateRange.start;
 		const endKey:string = this.selectedDateRange.end ?? startKey;
@@ -148,7 +148,7 @@ class DateRange {
 		return (date.toISOString().slice(0, 10).replace(/-/g, ''));
 	}
 
-	public stepDateRange(days: number) {
+	public stepDateRange(days: number): void {
 		this.start = DateRange.convertFromDate(DateRange.addDaysToDates(this.start, days));
 		if (this.end) this.end = DateRange.convertFromDate(DateRange.addDaysToDates(this.end, days));
 	}

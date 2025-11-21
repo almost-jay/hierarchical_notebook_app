@@ -84,5 +84,9 @@ export default defineConfig([{
 			caughtErrorsIgnorePattern: "^_",
             varsIgnorePattern: "^_",
         }],
+		"@typescript-eslint/explicit-function-return-type": ["error", {
+			allowHigherOrderFunctions: false,
+			allowExpressions: true,
+		}]
     },
 }]);

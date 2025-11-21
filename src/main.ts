@@ -34,7 +34,7 @@ class Manager {
 		// TODO: Also cache and load data
 	}
 
-	private initialiseNotes() {
+	private initialiseNotes(): void {
 
 		// TODO: Load a note from the dang cache
 		// Also the overview is in Notes
@@ -53,7 +53,7 @@ class Manager {
 		return overview;
 	}
 
-	private initialiseInput() {
+	private initialiseInput(): void {
 		window.addEventListener('keydown', (e) => {
 			if ((e.ctrlKey || e.metaKey) && e.key === 's') {
 				e.preventDefault();
@@ -154,7 +154,7 @@ class Manager {
 
 	}
 
-	private displayCurrentEntries() {
+	private displayCurrentEntries(): void {
 		if (this.activeNoteIndex == null) return; // TODO
 		
 		this.updateNoteTitleDisplay();
@@ -243,7 +243,7 @@ class Manager {
 
 	}
 
-	private setCurrentNote(noteId: string) { // CHECK: Should this be renamed because it really mainly renders the note
+	private setCurrentNote(noteId: string): void { // CHECK: Should this be renamed because it really mainly renders the note
 		const overviewControls = document.getElementById('overview-controls') as HTMLDivElement;
 		if (this.activeNoteIndex == 0) {
 			overviewControls.classList.remove('show');
@@ -277,7 +277,7 @@ class Manager {
 		return newNote;
 	}
 
-	private updateNoteTitleDisplay() {
+	private updateNoteTitleDisplay(): void {
 		if (!this.notes[this.activeNoteIndex]) return;
 		const noteTitle = document.getElementById('note-title');
 		const isUnsaved = this.notes[this.activeNoteIndex].isUnsaved();
@@ -285,7 +285,7 @@ class Manager {
 	}
 
 
-	private addNoteElements(note: Note) {
+	private addNoteElements(note: Note): void {
 		const noteTabsContainer = document.getElementById('note-tabs') as HTMLDivElement;
 
 		const radioElement: HTMLInputElement = document.createElement('input');
@@ -306,7 +306,7 @@ class Manager {
 		this.logInput.focus();
 	}
 
-	private insertNewLine() {
+	private insertNewLine(): void {
 		const lines = this.logInput.value.split('\n');
 		const currentLine = lines[lines.length - 1];
 		this.currentIndentationLevel = this.countLeadingTabs(currentLine);
@@ -317,12 +317,12 @@ class Manager {
 		this.updateLogInputHeight();
 	}
 
-	private updateLogInputHeight() {
+	private updateLogInputHeight(): void {
 		this.logInput.style.height = '0px';
 		this.logInput.style.height = this.logInput.scrollHeight + 'px';
 	}
 
-	private updatePersistentText() {
+	private updatePersistentText(): void {
 		if (this.activeNoteIndex == 0) return;
 		if (!this.notes[this.activeNoteIndex]) return;
 
@@ -330,7 +330,7 @@ class Manager {
 		this.updateNoteTitleDisplay();
 	}
 
-	private submitEntry() {
+	private submitEntry(): void {
 		const entryText = this.logInput.value;
 		if (entryText.trim().length == 0) return;
 		if (this.activeNoteIndex == null) return; // TODO
@@ -372,7 +372,7 @@ class Manager {
 		this.displayCurrentEntries();
 	}
 
-	private updateOverview() {
+	private updateOverview(): void {
 		const allEntries = [];
 		this.overview.clearEntries();
 		for (const note of this.notes) {
@@ -381,7 +381,7 @@ class Manager {
 		this.overview.updateEntries(allEntries);
 	}
 
-	private async loadAllNotes() {
+	private async loadAllNotes(): Promise<void> {
 		// Check if the headings file exists
 		// If it does, we will add new notes
 		const notesAdded = [];
@@ -407,7 +407,7 @@ class Manager {
 
 	}
 
-	private async saveNotes(saveAll: boolean = false) {
+	private async saveNotes(saveAll: boolean = false): Promise<void> {
 		if (!(saveAll || this.notes[this.activeNoteIndex].isUnsaved())) return;
 		let noteHeadings = '';
 		for (let i = 1; i < this.notes.length; i++) {
@@ -432,7 +432,7 @@ class Manager {
 
 	}
 
-	private stripLeadingTabs(line: string) {
+	private stripLeadingTabs(line: string): string {
 		return line.replace(new RegExp(`^${this.userSettings.indentString}+`), '');
 	}
 }

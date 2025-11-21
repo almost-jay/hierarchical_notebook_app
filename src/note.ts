@@ -67,15 +67,15 @@ export class Note {
 	}
 
 
-	public isUnsaved() {
+	public isUnsaved(): boolean {
 		return this.isPersistentTextUnsaved || this.isEntriesUnsaved;
 	}
 
-	public getPersistentTextContent() {
+	public getPersistentTextContent(): string {
 		return this.persistentText;
 	}
 
-	public updatePersistentTextContent(textContent: string) {
+	public updatePersistentTextContent(textContent: string): void {
 		this.persistentText = textContent;
 
 		this.isPersistentTextUnsaved = this.persistentText != this.savedPersistentText;
@@ -132,12 +132,12 @@ export class Note {
 		this.isEntriesUnsaved = true;
 	}
 
-	public updateEntry(targetEntryId: number, newText: string) {
+	public updateEntry(targetEntryId: number, newText: string): void {
 		this.entries[targetEntryId].text = newText;
 		// TODO
 	}
 
-	public rename() {
+	public rename(): void {
 		// TODO
 	}
 	

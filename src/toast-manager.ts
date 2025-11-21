@@ -11,7 +11,7 @@ export class ToastManager {
 		this.container = container;
 	}
 
-	public show(type: string, message: string) {
+	public show(type: string, message: string): void {
 		const toast_type: string = this.TOAST_TYPES.includes(type) ? type : this.TOAST_TYPES[1];
 		const toast = document.createElement('div');
 		toast.classList.add('toast',toast_type);

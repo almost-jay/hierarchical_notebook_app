@@ -9,9 +9,9 @@ export class Note {
 	public lastSaved?: Date;
 	protected isEntriesUnsaved: boolean = true;
 	protected isPersistentTextUnsaved: boolean = true;
+	protected isTitleSet: boolean;
 	private persistentText: string = '';
 	private savedPersistentText: string = '';
-	private isTitleSet: boolean;
 
 	public constructor(title: string, created?: Date, lastSaved?: Date, savedPersistentText?: string) {
 		this.title = title;
@@ -102,7 +102,7 @@ export class Note {
 		const persistentFileName = `${this.id}-persistent`;
 		const entriesFileName = `${this.id}-entries`;
 		
-		const buffers: ArrayBuffer[] = this.entries.map(e => e.toBinary());	
+		const buffers: ArrayBuffer[] = this.getOwnEntries().map(e => e.toBinary());	
 		const totalLength = buffers.reduce((sum, buffer) => sum + buffer.byteLength, 0);
 
 		const entriesAsBinary = new Uint8Array(totalLength); // ArrayBuffer can't be directly concatenated, so we put a Uint8Array over it
@@ -125,6 +125,10 @@ export class Note {
 		this.isPersistentTextUnsaved = false;
 
 		return true;
+	}
+
+	public getOwnEntries(): Entry[] {
+		return this.entries;
 	}
 	
 	public addEntry(newEntry: Entry): void {

@@ -1,5 +1,6 @@
 import { Entry } from './entry';
 import { Note } from './note';
+import { NoteUtils } from './note-utils';
 
 export class Overview extends Note {
 	public overviewEntries: Entry[] = [];
@@ -9,15 +10,44 @@ export class Overview extends Note {
 	private aggregatedEntries: EntriesByDay;
 	private selectedNoteId?: string;
 
-	public constructor(allEntries: EntryWithSource[]) {
+	public constructor() {
 		super('Overview'); // Creates a note with the hard-set title "overview"
 		this.id = '.'+this.id; // force a . in front of title for file reasons
 		this.currentDate = DateRange.convertFromDate(new Date());
-		this.selectedDateRange = new DateRange(new Date());
-		this.aggregatedEntries = Overview.collateEntries(allEntries);
-		this.earliestDate = Object.keys(this.aggregatedEntries).sort()[0] || this.currentDate;
+		this.selectedDateRange = new DateRange(new Date())
 		this.isPersistentTextUnsaved = false;
-		this.isEntriesUnsaved = false;
+		this.isTitleSet = true;
+	}
+
+	public static async loadFromFile(): Promise<Overview> {
+		const entriesFileName: string = '.overview-entries';
+		
+		const newOverview = new Overview();
+		
+		if (NoteUtils.doesFileExist(entriesFileName+'.bin')) {
+			const entryFile = await NoteUtils.getBinaryFile(entriesFileName);
+			const dataView = new DataView(entryFile);
+			let i = 0;
+
+			while (i < entryFile.byteLength) {
+				const id = dataView.getUint16(i + 0);
+				const groupId = dataView.getUint16(i + 2);
+				const quotedId = dataView.getUint16(i + 4);
+				const indentLevel = dataView.getUint8(i + 6);
+				const created = new Date(Number(dataView.getBigUint64(i + 7)));
+				const lastEdited = new Date(Number(dataView.getBigUint64(i + 15)));
+				const textLength = dataView.getUint16(i + 23);
+				const text = new TextDecoder('utf-8').decode(entryFile.slice(i + 25, i + 25 + textLength)); // ? Should this be split across multiple lines
+
+				newOverview.addEntry(new Entry(id, groupId, text, created, indentLevel, lastEdited, quotedId));
+				i += 25 + textLength;
+			}
+
+			return newOverview;
+		} else {
+			console.error(`Could not find entries file ${entriesFileName}!`);
+		}
+	
 	}
 
 	private static collateEntries(allEntries: EntryWithSource[]): EntriesByDay {
@@ -58,6 +88,7 @@ export class Overview extends Note {
 	public addEntry(newEntry: Entry): void {
 		this.overviewEntries.push(newEntry);
 		this.updateEntriesShown();
+		this.isEntriesUnsaved = true;
 	}
 
 	public clearEntries(): void {
@@ -70,6 +101,7 @@ export class Overview extends Note {
 			allEntries.push(newEntryWrapper); // Adds its own entries to the collated entry thing
 		});
 		this.aggregatedEntries = Overview.collateEntries(allEntries);
+		this.earliestDate = Object.keys(this.aggregatedEntries).sort()[0] || this.currentDate;
 		this.updateEntriesShown();
 	}
 
@@ -85,34 +117,39 @@ export class Overview extends Note {
 		}
 	}
 
-	public updateSelectedDate(newDateStart: Date, newDateEnd?: Date): boolean {
-		const newDateRange: DateRange = new DateRange(newDateStart, newDateEnd);
-		if (newDateRange.start >= this.earliestDate && newDateRange.end || newDateRange.start <= this.currentDate) {
-			this.selectedDateRange = newDateRange; // TODO: allow range clipping
+	public updateSelectedDate(newDateStart: Date): boolean {
+		const newDateRange: DateRange = new DateRange(newDateStart);
+		if (newDateRange.start >= this.earliestDate && newDateRange.start <= this.currentDate) {
+			this.selectedDateRange = newDateRange;
 			return true;
 		} else {
 			return false;
 		}
 	}
 
-	public stepForward(): boolean { // Returns a value true/false if the corresponding button should be greyed out
+	public updateSelectedDateRange(newDateRange: number): boolean {
+		if (newDateRange == 0) return false;
+		this.selectedDateRange.end = DateRange.convertFromDate(DateRange.addDaysToDates(this.selectedDateRange.start, newDateRange));
+	}
+
+	public stepForward(): void { // Returns a value true/false if the corresponding button should be greyed out
 		this.selectedDateRange.stepDateRange(this.selectedDateRange.range);
-
-		if (this.selectedDateRange.end || this.selectedDateRange.start >= this.currentDate) {
-			return true;
-		} else {
-			return false;
-		}
 	}
 
-	public stepBackward(): boolean {
+	public stepBackward(): void {
 		this.selectedDateRange.stepDateRange(-this.selectedDateRange.range);
+	}
 
-		if (this.selectedDateRange.start <= this.earliestDate) {
-			return true;
-		} else {
-			return false;
-		}
+	public isCurrentDateLatest(): boolean {
+		return (this.selectedDateRange.end || this.selectedDateRange.start) >= this.currentDate;
+	}
+
+	public isCurrentDateEarliest(): boolean {
+		return this.selectedDateRange.start <= this.earliestDate;
+	}
+
+	public getOwnEntries(): Entry[] {
+		return this.overviewEntries;
 	}
 }
 

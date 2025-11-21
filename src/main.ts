@@ -27,7 +27,7 @@ class Manager {
 		this.persistentTextInput = document.getElementById('persistent-text-input') as HTMLTextAreaElement;
 
 		this.initialiseNotes();
-		this.overview = this.initialiseOverview();
+		this.initialiseOverview();
 		this.updateOverview();
 		this.initialiseInput();
 		// TODO: Also store and fetch user settings
@@ -48,16 +48,19 @@ class Manager {
 	}
 
 	private initialiseOverview(): Overview {
-		const overview = new Overview([]);
+		if (this.overview) return;
+
+		const overview = new Overview();
 		this.notes.unshift(overview);
-		return overview;
+		this.overview = overview;
 	}
 
 	private initialiseInput(): void {
 		window.addEventListener('keydown', (e) => {
-			if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+			console.log(e);
+			if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
 				e.preventDefault();
-				
+				console.log(e.shiftKey);
 				this.saveNotes(e.shiftKey); // Saves all notes on Ctrl + Shift + S, and just the active one on Ctrl + S
 			}
 		});
@@ -90,19 +93,27 @@ class Manager {
 			this.overview.updateSelectedDate(newDate);
 		});
 
-		const overviewDateRangeSelector = document.getElementById('date-range-selector');
+		const overviewDateRangeSelector = document.getElementById('date-range-selector') as HTMLInputElement;
 		overviewDateRangeSelector.addEventListener('change', () => {
-
+			const newDateRange = parseInt(overviewDateRangeSelector.value);
+			this.overview.updateSelectedDateRange(newDateRange);
 		});
 
 		const overviewDayPrev = document.getElementById('day-prev') as HTMLButtonElement;
 		const overviewDayNext = document.getElementById('day-next') as HTMLButtonElement;
 
+		overviewDayPrev.disabled = this.overview.isCurrentDateEarliest();
+		overviewDayNext.disabled = this.overview.isCurrentDateLatest();
+
 		overviewDayPrev.addEventListener('click', () => {
-			overviewDayPrev.disabled = this.overview.stepBackward();
+			this.overview.stepBackward();
+			overviewDayPrev.disabled = this.overview.isCurrentDateEarliest();
 		});
 
-		overviewDayNext.addEventListener('click', () => { overviewDayNext.disabled = this.overview.stepForward(); });
+		overviewDayNext.addEventListener('click', () => { 
+			this.overview.stepForward(); 
+			overviewDayNext.disabled = this.overview.isCurrentDateLatest();
+		});
 
 
 		const entriesContainer = document.getElementById('entry-container') as HTMLDivElement;
@@ -162,7 +173,7 @@ class Manager {
 		const entriesContainer = document.getElementById('entry-container') as HTMLDivElement;
 		entriesContainer.innerHTML = '';
 
-		const entries = this.notes[this.activeNoteIndex].entries;
+		const entries = this.notes[this.activeNoteIndex].entries; // We are using .entries here instead of getOwnEntries deliberately
 
 		if (entries.length == 0) return;
 
@@ -258,10 +269,11 @@ class Manager {
 		if (this.activeNoteIndex == 0) {
 			overviewControls.classList.add('show');
 			this.updateOverview();
-			this.persistentTextInput.value = '';
-			// TODO: Display persistent text for overview
+			this.persistentTextInput.value = ''; // TODO: Display persistent text for overview
+			this.persistentTextInput.readOnly = true;
 		} else {
 			this.persistentTextInput.value = this.notes[this.activeNoteIndex].getPersistentTextContent();
+			this.persistentTextInput.readOnly = false;
 		}
 
 		this.displayCurrentEntries();
@@ -339,18 +351,11 @@ class Manager {
 		const currentTime = new Date();
 
 		let groupId = 0;
-		if (this.activeNoteIndex == 0) { // The overview has some weirdnesses about grouping, so we need to make sure we use the overview's overviewEntry component instead.
-			if (this.overview.overviewEntries.length > 0) {
-				groupId = this.overview.overviewEntries[this.overview.overviewEntries.length - 1].groupId;
-				const previousEntryCreated = this.overview.overviewEntries[this.overview.overviewEntries.length - 1].created;
-				const timeSincePreviousEntry = currentTime.getTime() - previousEntryCreated.getTime();
-				if (timeSincePreviousEntry / 60000 > this.userSettings.groupInterval) { // divide by 60000 ∵ ms -> minutes
-					groupId++;
-				}
-			}
-		} else if (note.entries.length > 0) {
-			groupId = note.entries[note.entries.length - 1].groupId;
-			const previousEntryCreated = note.entries[note.entries.length - 1].created;
+		const entries = note.getOwnEntries();
+
+		if (entries.length > 0) {
+			groupId = entries[entries.length - 1].groupId;
+			const previousEntryCreated = entries[entries.length - 1].created;
 			const timeSincePreviousEntry = currentTime.getTime() - previousEntryCreated.getTime();
 			if (timeSincePreviousEntry / 60000 > this.userSettings.groupInterval) { // divide by 60000 ∵ ms -> minutes
 				groupId++;
@@ -359,7 +364,7 @@ class Manager {
 
 		const splitLines = entryText.split('\n');
 		const indentLevel = this.countLeadingTabs(splitLines[splitLines.length - 1]);
-		const newEntry = new Entry(note.entries ? note.entries.length : 0, groupId, entryText, currentTime, indentLevel);
+		const newEntry = new Entry(entries ? entries.length : 0, groupId, entryText, currentTime, indentLevel);
 		note.addEntry(newEntry);
 
 		// TODO: Verify that the entry was submitted before clearing textarea
@@ -376,7 +381,7 @@ class Manager {
 		const allEntries = [];
 		this.overview.clearEntries();
 		for (const note of this.notes) {
-			allEntries.push(...note.entries.map(entry => ({ entry: entry, sourceNoteId: note.id })));
+			allEntries.push(...note.entries.map(entry => ({ entry: entry, sourceNoteId: note.id })));  // Deliberately using .entries instead of getOwnEntries here
 		}
 		this.overview.updateEntries(allEntries);
 	}
@@ -390,10 +395,17 @@ class Manager {
 			const noteIdList: string[] = (await NoteUtils.getMarkdownFile(this.userSettings.noteIndexFileName)).split('\n');
 			for (const noteId of noteIdList) {
 				if (noteId == '') continue;
-				const newNote = await Note.loadFromFile(noteId);
-				this.notes.push(newNote);
-				notesAdded.push(newNote.id);
-				this.addNoteElements(newNote);
+
+				if (noteId == '.overview') {
+					const newOverview: Overview = await Overview.loadFromFile();
+					this.notes.unshift(newOverview)
+					this.overview = newOverview;
+				} else {
+					const newNote = await Note.loadFromFile(noteId);
+					this.notes.push(newNote);
+					notesAdded.push(newNote.id);
+					this.addNoteElements(newNote);
+				}
 			}
 			if (notesAdded.length > 0) {
 				const noteTab = document.getElementById(notesAdded[0]) as HTMLInputElement;
@@ -410,7 +422,7 @@ class Manager {
 	private async saveNotes(saveAll: boolean = false): Promise<void> {
 		if (!(saveAll || this.notes[this.activeNoteIndex].isUnsaved())) return;
 		let noteHeadings = '';
-		for (let i = 1; i < this.notes.length; i++) {
+		for (let i = 0; i < this.notes.length; i++) {
 			const note = this.notes[i];
 			noteHeadings += note.id+'\n';
 			note.updatePersistentTextContent(this.persistentTextInput.value);
@@ -423,6 +435,8 @@ class Manager {
 				this.toastManager.show('info',`Saved as ${this.notes[this.activeNoteIndex].id}.md`);
 				await NoteUtils.writeMarkdownFile(this.userSettings.noteIndexFileName,noteHeadings);
 			}
+		} else {
+			this.toastManager.show('info','Saved all notes');
 		}
 		this.updateNoteTitleDisplay();
 	}

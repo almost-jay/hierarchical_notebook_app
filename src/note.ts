@@ -1,42 +1,35 @@
-import { Entry } from "./entry";
-import { NoteUtils } from "./note-utils";
+import { Entry } from './entry';
+import { NoteUtils } from './note-utils';
 
 export class Note {
-	id: string; // Slugified version of title
-	title: string; // 
-	persistentText: string = "";
-	savedPersistentText: string = "";
-	entries: Entry[] = [];
-	created: Date;
-	lastSaved?: Date;
-	isEntriesUnsaved: boolean;
-	isPersistentTextUnsaved: boolean;
-	isTitleSet: boolean;
+	public id: string; // Slugified version of title
+	public title: string;
+	public entries: Entry[] = [];
+	public created: Date;
+	public lastSaved?: Date;
+	protected isEntriesUnsaved: boolean = true;
+	protected isPersistentTextUnsaved: boolean = true;
+	private persistentText: string = '';
+	private savedPersistentText: string = '';
+	private isTitleSet: boolean;
 
-	constructor(title: string, created?: Date, lastSaved?: Date, savedPersistentText?: string) {
+	public constructor(title: string, created?: Date, lastSaved?: Date, savedPersistentText?: string) {
 		this.title = title;
 		this.id = NoteUtils.slugify(title);
-		this.isPersistentTextUnsaved = true;
 		this.isTitleSet = false;
 		this.created = created ?? new Date();
 		if (lastSaved) this.lastSaved = lastSaved;
 		if (savedPersistentText) this.savedPersistentText = savedPersistentText;
 	}
 
-	public updatePersistentTextContent(textContent: string) {
-		this.persistentText = textContent;
-
-		this.isPersistentTextUnsaved = this.persistentText != this.savedPersistentText;
-	}
-
 	public static async loadFromFile(noteId: string): Promise<Note> {
-		const persistentFileName = `${noteId}-persistent`;
-		const entriesFileName = `${noteId}-entries`;
-		if(NoteUtils.doesFileExist(persistentFileName+".md")) {
+		const persistentFileName: string = `${noteId}-persistent`;
+		const entriesFileName: string = `${noteId}-entries`;
+		if(NoteUtils.doesFileExist(persistentFileName+'.md')) {
 			const fileText: string = await NoteUtils.getMarkdownFile(persistentFileName);
-			const title = fileText.match(/title:\s*(.+)/)?.[1] ?? "";
-			const created = new Date(Number(fileText.match(/created:\s*(\d+)/)?.[1] ?? "0"));
-			const lastSaved = new Date(Number(fileText.match(/lastSaved:\s*(\d+)/)?.[1] ?? "0"));
+			const title = fileText.match(/title:\s*(.+)/)?.[1] ?? '';
+			const created = new Date(Number(fileText.match(/created:\s*(\d+)/)?.[1] ?? '0'));
+			const lastSaved = new Date(Number(fileText.match(/lastSaved:\s*(\d+)/)?.[1] ?? '0'));
 
 			const textContentMatch = fileText.match(/(?:---\n[\s\S]*?---\n)([\s\S]*)/);
 			const textContent = textContentMatch ? textContentMatch[1].trim() : '';
@@ -45,7 +38,7 @@ export class Note {
 			newNote.updatePersistentTextContent(textContent);
 			newNote.isTitleSet = true;
 
-			if (NoteUtils.doesFileExist(entriesFileName+".bin")) {
+			if (NoteUtils.doesFileExist(entriesFileName+'.bin')) {
 				const entryFile = await NoteUtils.getBinaryFile(entriesFileName);
 				const dataView = new DataView(entryFile);
 				let i = 0;
@@ -58,12 +51,12 @@ export class Note {
 					const created = new Date(Number(dataView.getBigUint64(i + 7)));
 					const lastEdited = new Date(Number(dataView.getBigUint64(i + 15)));
 					const textLength = dataView.getUint16(i + 23);
-					const text = new TextDecoder("utf-8").decode(entryFile.slice(i + 25, i + 25 + textLength)); // ? Should this be split across multiple lines
+					const text = new TextDecoder('utf-8').decode(entryFile.slice(i + 25, i + 25 + textLength)); // ? Should this be split across multiple lines
 
 					newNote.addEntry(new Entry(id, groupId, text, created, indentLevel, lastEdited, quotedId));
 					i += 25 + textLength;
 				}
-				
+				newNote.isEntriesUnsaved = false;
 				return newNote;
 			} else {
 				console.error(`Could not find entries file ${entriesFileName}!`);
@@ -73,11 +66,26 @@ export class Note {
 		}
 	}
 
-	async save(): Promise<boolean> {
+
+	public isUnsaved() {
+		return this.isPersistentTextUnsaved || this.isEntriesUnsaved;
+	}
+
+	public getPersistentTextContent() {
+		return this.persistentText;
+	}
+
+	public updatePersistentTextContent(textContent: string) {
+		this.persistentText = textContent;
+
+		this.isPersistentTextUnsaved = this.persistentText != this.savedPersistentText;
+	}
+
+	public async save(): Promise<boolean> {
 		if (!this.isTitleSet) {
-			let newTitle: string = this.persistentText.split("\n")[0];
-			let newId: string = NoteUtils.slugify(newTitle);
-			if (newId == "") {
+			const newTitle: string = this.persistentText.split('\n')[0];
+			const newId: string = NoteUtils.slugify(newTitle);
+			if (newId == '') {
 				if (!(await confirm(`Save this note as ${this.id}.md?`))) {
 					return false;
 				} else {
@@ -107,7 +115,7 @@ export class Note {
 		
 
 		this.lastSaved = new Date();
-		let frontmatter: string = `---\ntitle: ${this.title}\ncreated: ${this.created.getTime()}\nlastSaved: ${this.lastSaved.getTime()}---`;
+		const frontmatter: string = `---\ntitle: ${this.title}\ncreated: ${this.created.getTime()}\nlastSaved: ${this.lastSaved.getTime()}---`;
 
 		await NoteUtils.writeMarkdownFile(persistentFileName, frontmatter + this.persistentText);
 		await NoteUtils.writeBinaryFile(entriesFileName, entriesAsBinary);
@@ -118,14 +126,6 @@ export class Note {
 
 		return true;
 	}
-
-
-	load() {
-		
-		// Get file from filepath for both entries and persistent
-		
-
-	}
 	
 	public addEntry(newEntry: Entry): void {
 		this.entries.push(newEntry);
@@ -133,10 +133,11 @@ export class Note {
 	}
 
 	public updateEntry(targetEntryId: number, newText: string) {
-		// this.entries[id].text = newText
+		this.entries[targetEntryId].text = newText;
+		// TODO
 	}
 
-	rename() {
+	public rename() {
 		// TODO
 	}
 	

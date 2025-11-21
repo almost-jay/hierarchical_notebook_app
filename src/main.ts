@@ -1,30 +1,30 @@
-import { Entry } from "./entry";
-import { Note } from "./note";
-import { NoteUtils } from "./note-utils";
-import { Overview } from "./overview";
-import { ToastManager } from "./toast-manager";
+import { Entry } from './entry';
+import { Note } from './note';
+import { NoteUtils } from './note-utils';
+import { Overview } from './overview';
+import { ToastManager } from './toast-manager';
 
 // CHECK: remove plugin dialog? remove rust code?
 
 class Manager {
-	notes: Note[] = [];
-	overview: Overview;
-	activeNoteIndex: number;
-	userSettings = {
-		indentString: "\t",
+	private notes: Note[] = [];
+	private overview: Overview;
+	private activeNoteIndex: number;
+	private userSettings: UserSettings = {
+		indentString: '\t',
 		groupInterval: 5, // minutes
-		noteIndexFileName: ".note-headings",
+		noteIndexFileName: '.note-headings',
 		toastDuration: 3000, //ms
 	};
-	logInput: HTMLTextAreaElement;
-	persistentTextInput: HTMLTextAreaElement;
-	currentIndentationLevel: number = 0;
-	toastManager: ToastManager;
+	private logInput: HTMLTextAreaElement;
+	private persistentTextInput: HTMLTextAreaElement;
+	private currentIndentationLevel: number = 0;
+	private toastManager: ToastManager;
 
 	public constructor() {
 		this.toastManager = new ToastManager(this.userSettings.toastDuration);
-		this.logInput = document.getElementById("log-input") as HTMLTextAreaElement;
-		this.persistentTextInput = document.getElementById("persistent-text-input") as HTMLTextAreaElement;
+		this.logInput = document.getElementById('log-input') as HTMLTextAreaElement;
+		this.persistentTextInput = document.getElementById('persistent-text-input') as HTMLTextAreaElement;
 
 		this.initialiseNotes();
 		this.overview = this.initialiseOverview();
@@ -39,8 +39,8 @@ class Manager {
 		// TODO: Load a note from the dang cache
 		// Also the overview is in Notes
 		this.loadAllNotes();
-		const noteTabsContainer = document.getElementById("note-tabs") as HTMLDivElement;
-		noteTabsContainer.innerHTML = "";
+		const noteTabsContainer = document.getElementById('note-tabs') as HTMLDivElement;
+		noteTabsContainer.innerHTML = '';
 		// FOR i in note
 		// do:
 		// uhhh render it or sum idfk
@@ -54,69 +54,73 @@ class Manager {
 	}
 
 	private initialiseInput() {
-		window.addEventListener("keydown", (e) => {
-			if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+		window.addEventListener('keydown', (e) => {
+			if ((e.ctrlKey || e.metaKey) && e.key === 's') {
 				e.preventDefault();
 				
 				this.saveNotes(e.shiftKey); // Saves all notes on Ctrl + Shift + S, and just the active one on Ctrl + S
 			}
 		});
 
-		this.persistentTextInput.addEventListener("keyup", (e) => {
-			if (e.key == " " || e.key == "Enter") this.updatePersistentText();
+		this.persistentTextInput.addEventListener('keyup', (e) => {
+			if (e.key == ' ' || e.key == 'Enter') this.updatePersistentText();
 		});
 				
-		const noteTabsContainer = document.getElementById("sidebar") as HTMLFormElement;
-		noteTabsContainer.addEventListener("click", (e) => {
+		const noteTabsContainer = document.getElementById('sidebar') as HTMLFormElement;
+		noteTabsContainer.addEventListener('click', (e) => {
 			const target = e.target as HTMLElement;
-			if (target.className == "tab-input") {
+			if (target.className == 'tab-input') {
 				this.setCurrentNote(target.id);
 			}
 
 		});
 
-		const addNotetab = document.getElementById("add-note-tab") as HTMLDivElement;
-		addNotetab.addEventListener("click", (e) => {
+		const addNotetab = document.getElementById('add-note-tab') as HTMLDivElement;
+		addNotetab.addEventListener('click', (e) => {
 			e.preventDefault();
 			this.addNewNote(`Untitled ${this.notes.length}`);
 			this.setCurrentNote(this.notes[this.notes.length - 1].id);
 		});
 
-		const overviewDateSelector = document.getElementById("start-date-selector") as HTMLInputElement;
+		const overviewDateSelector = document.getElementById('start-date-selector') as HTMLInputElement;
 		overviewDateSelector.min = this.overview.earliestDate;
-		overviewDateSelector.addEventListener("change", (e) => {
+		overviewDateSelector.max = this.overview.currentDate;
+		overviewDateSelector.addEventListener('change', () => {
 			const newDate = new Date(overviewDateSelector.value);
 			this.overview.updateSelectedDate(newDate);
 		});
 
-		const overviewDateRangeSelector = document.getElementById("date-range-selector");
+		const overviewDateRangeSelector = document.getElementById('date-range-selector');
+		overviewDateRangeSelector.addEventListener('change', () => {
 
-		const overviewDayPrev = document.getElementById("day-prev") as HTMLButtonElement;
-		const overviewDayNext = document.getElementById("day-next") as HTMLButtonElement;
+		});
 
-		overviewDayPrev.addEventListener("click", (e) => {
+		const overviewDayPrev = document.getElementById('day-prev') as HTMLButtonElement;
+		const overviewDayNext = document.getElementById('day-next') as HTMLButtonElement;
+
+		overviewDayPrev.addEventListener('click', () => {
 			overviewDayPrev.disabled = this.overview.stepBackward();
 		});
 
-		overviewDayNext.addEventListener("click", (e) => { overviewDayNext.disabled = this.overview.stepForward(); });
+		overviewDayNext.addEventListener('click', () => { overviewDayNext.disabled = this.overview.stepForward(); });
 
 
-		const entriesContainer = document.getElementById("entry-container") as HTMLDivElement;
+		const entriesContainer = document.getElementById('entry-container') as HTMLDivElement;
 
-		entriesContainer.addEventListener("click", (e) => {
+		entriesContainer.addEventListener('click', (e) => {
 			const target = e.target as HTMLElement;
-			if (target.classList.contains("disclosure-widget")) {
+			if (target.classList.contains('disclosure-widget')) {
 				const parent = target.parentElement;
 				if (!parent) return;
 
-				parent.classList.toggle("collapsed");
+				parent.classList.toggle('collapsed');
 			}
 		});
 
-		this.logInput.addEventListener("input", (e) => {
+		this.logInput.addEventListener('input', () => {
 			this.updateLogInputHeight();
 		});
-		this.logInput.addEventListener("keydown", (e) => {
+		this.logInput.addEventListener('keydown', (e) => {
 			// console.log(e);
 			if (e.keyCode == 9) { // Tab key - because Shift + Tab returns e.key == "Unidentified"
 				e.preventDefault();
@@ -145,8 +149,8 @@ class Manager {
 			}
 		});
 
-		const submitEntryButton = document.getElementById("submit-entry-button") as HTMLButtonElement;
-		submitEntryButton.addEventListener("click", (e) => { this.submitEntry() });
+		const submitEntryButton = document.getElementById('submit-entry-button') as HTMLButtonElement;
+		submitEntryButton.addEventListener('click', () => { this.submitEntry() });
 
 	}
 
@@ -155,10 +159,10 @@ class Manager {
 		
 		this.updateNoteTitleDisplay();
 
-		const entriesContainer = document.getElementById("entry-container") as HTMLDivElement;
-		entriesContainer.innerHTML = "";
+		const entriesContainer = document.getElementById('entry-container') as HTMLDivElement;
+		entriesContainer.innerHTML = '';
 
-		let entries = this.notes[this.activeNoteIndex].entries;
+		const entries = this.notes[this.activeNoteIndex].entries;
 
 		if (entries.length == 0) return;
 
@@ -170,26 +174,26 @@ class Manager {
 			let nextIndex = currentIndex + 1;
 
 			while (nextIndex < entries.length && entries[nextIndex].groupId === currentGroupId) {
-				textContent += "\n" + entries[nextIndex].text;
+				textContent += '\n' + entries[nextIndex].text;
 				nextIndex++;
 			}
 
-			const entryDiv = document.createElement("div");
-			entryDiv.classList.add("entry-content");
+			const entryDiv = document.createElement('div');
+			entryDiv.classList.add('entry-content');
 
-			const entryHeader = document.createElement("div");
-			entryHeader.classList.add("entry-header");
+			const entryHeader = document.createElement('div');
+			entryHeader.classList.add('entry-header');
 
-			const headingBreak = document.createElement("hr");
+			const headingBreak = document.createElement('hr');
 			entryHeader.appendChild(headingBreak);
 
-			const timestampSpan = document.createElement("span");
+			const timestampSpan = document.createElement('span');
 			timestampSpan.textContent = NoteUtils.formatDate(entries[currentIndex].created); // TODO: Relative/contextual/fuzzy time
 			entryHeader.appendChild(timestampSpan);
 
 			entryDiv.appendChild(entryHeader);
 
-			const splitLines = textContent.split("\n");
+			const splitLines = textContent.split('\n');
 			let parents: HTMLDivElement[] = [];
 
 			for (let i = 0; i < splitLines.length; i++) {
@@ -197,8 +201,8 @@ class Manager {
 				const indentLevel = this.countLeadingTabs(line);
 				const text = this.stripLeadingTabs(line);
 
-				const entryTextDiv = document.createElement("div");
-				entryTextDiv.classList.add("entry-text");
+				const entryTextDiv = document.createElement('div');
+				entryTextDiv.classList.add('entry-text');
 
 				let hasChildren = false;
 				if (i < splitLines.length - 1) {
@@ -207,20 +211,20 @@ class Manager {
 				}
 
 				if (hasChildren) {
-					const disclosureWidget = document.createElement("span");
-					disclosureWidget.classList.add("disclosure-widget");
+					const disclosureWidget = document.createElement('span');
+					disclosureWidget.classList.add('disclosure-widget');
 					entryTextDiv.appendChild(disclosureWidget);
 				}
 
-				const entryTextSpan = document.createElement("span");
+				const entryTextSpan = document.createElement('span');
 				entryTextSpan.textContent = text;
 				entryTextDiv.appendChild(entryTextSpan);
 
 				let parentContainer = entryDiv;
 				for (let j = 0; j < indentLevel; j++) {
 					if (!parents[j]) {
-						const emptyDiv = document.createElement("div");
-						emptyDiv.classList.add("entry-text");
+						const emptyDiv = document.createElement('div');
+						emptyDiv.classList.add('entry-text');
 						parentContainer.appendChild(emptyDiv);
 						parents[j] = emptyDiv;
 					}
@@ -240,9 +244,9 @@ class Manager {
 	}
 
 	private setCurrentNote(noteId: string) { // CHECK: Should this be renamed because it really mainly renders the note
-		const overviewControls = document.getElementById("overview-controls") as HTMLDivElement;
+		const overviewControls = document.getElementById('overview-controls') as HTMLDivElement;
 		if (this.activeNoteIndex == 0) {
-			overviewControls.classList.remove("show");
+			overviewControls.classList.remove('show');
 		}
 
 		this.activeNoteIndex = this.notes.findIndex(note => note.id === noteId);
@@ -252,12 +256,12 @@ class Manager {
 		this.updateNoteTitleDisplay();
 
 		if (this.activeNoteIndex == 0) {
-			overviewControls.classList.add("show");
+			overviewControls.classList.add('show');
 			this.updateOverview();
-			this.persistentTextInput.value = "";
+			this.persistentTextInput.value = '';
 			// TODO: Display persistent text for overview
 		} else {
-			this.persistentTextInput.value = this.notes[this.activeNoteIndex].persistentText;
+			this.persistentTextInput.value = this.notes[this.activeNoteIndex].getPersistentTextContent();
 		}
 
 		this.displayCurrentEntries();
@@ -275,26 +279,23 @@ class Manager {
 
 	private updateNoteTitleDisplay() {
 		if (!this.notes[this.activeNoteIndex]) return;
-		const noteTitle = document.getElementById("note-title");
-		const isUnsaved = this.isCurrentNoteUnsaved();
-		noteTitle.textContent = (isUnsaved ? "* " : "") + this.notes[this.activeNoteIndex].title; // CHECK: Would this work better as an .unsaved class with ::before and color: var(--text-alt)
+		const noteTitle = document.getElementById('note-title');
+		const isUnsaved = this.notes[this.activeNoteIndex].isUnsaved();
+		noteTitle.textContent = (isUnsaved ? '* ' : '') + this.notes[this.activeNoteIndex].title; // CHECK: Would this work better as an .unsaved class with ::before and color: var(--text-alt)
 	}
 
-	private isCurrentNoteUnsaved(): boolean {
-		return this.notes[this.activeNoteIndex].isPersistentTextUnsaved || this.notes[this.activeNoteIndex].isEntriesUnsaved;
-	}
 
 	private addNoteElements(note: Note) {
-		const noteTabsContainer = document.getElementById("note-tabs") as HTMLDivElement;
+		const noteTabsContainer = document.getElementById('note-tabs') as HTMLDivElement;
 
-		const radioElement: HTMLInputElement = document.createElement("input");
-		radioElement.type = "radio";
+		const radioElement: HTMLInputElement = document.createElement('input');
+		radioElement.type = 'radio';
 		radioElement.id = note.id;
-		radioElement.name = "note-tabs";
-		radioElement.classList.add("tab-input");
+		radioElement.name = 'note-tabs';
+		radioElement.classList.add('tab-input');
 
-		const labelElement: HTMLLabelElement = document.createElement("label");
-		labelElement.classList.add("tab-label");
+		const labelElement: HTMLLabelElement = document.createElement('label');
+		labelElement.classList.add('tab-label');
 		labelElement.htmlFor = note.id;
 		labelElement.textContent = note.title;
 
@@ -317,8 +318,8 @@ class Manager {
 	}
 
 	private updateLogInputHeight() {
-		this.logInput.style.height = "0px";
-		this.logInput.style.height = this.logInput.scrollHeight + "px";
+		this.logInput.style.height = '0px';
+		this.logInput.style.height = this.logInput.scrollHeight + 'px';
 	}
 
 	private updatePersistentText() {
@@ -341,16 +342,16 @@ class Manager {
 		if (this.activeNoteIndex == 0) { // The overview has some weirdnesses about grouping, so we need to make sure we use the overview's overviewEntry component instead.
 			if (this.overview.overviewEntries.length > 0) {
 				groupId = this.overview.overviewEntries[this.overview.overviewEntries.length - 1].groupId;
-				let previousEntryCreated = this.overview.overviewEntries[this.overview.overviewEntries.length - 1].created;
-				let timeSincePreviousEntry = currentTime.getTime() - previousEntryCreated.getTime();
+				const previousEntryCreated = this.overview.overviewEntries[this.overview.overviewEntries.length - 1].created;
+				const timeSincePreviousEntry = currentTime.getTime() - previousEntryCreated.getTime();
 				if (timeSincePreviousEntry / 60000 > this.userSettings.groupInterval) { // divide by 60000 ∵ ms -> minutes
 					groupId++;
 				}
 			}
 		} else if (note.entries.length > 0) {
 			groupId = note.entries[note.entries.length - 1].groupId;
-			let previousEntryCreated = note.entries[note.entries.length - 1].created;
-			let timeSincePreviousEntry = currentTime.getTime() - previousEntryCreated.getTime();
+			const previousEntryCreated = note.entries[note.entries.length - 1].created;
+			const timeSincePreviousEntry = currentTime.getTime() - previousEntryCreated.getTime();
 			if (timeSincePreviousEntry / 60000 > this.userSettings.groupInterval) { // divide by 60000 ∵ ms -> minutes
 				groupId++;
 			}
@@ -372,71 +373,75 @@ class Manager {
 	}
 
 	private updateOverview() {
-		let allEntries = [];
+		const allEntries = [];
 		this.overview.clearEntries();
 		for (const note of this.notes) {
 			allEntries.push(...note.entries.map(entry => ({ entry: entry, sourceNoteId: note.id })));
 		}
 		this.overview.updateEntries(allEntries);
-		this.overview.updateEntriesShown();
-
-		
 	}
 
 	private async loadAllNotes() {
 		// Check if the headings file exists
 		// If it does, we will add new notes
 		const notesAdded = [];
-		if (await NoteUtils.doesFileExist(this.userSettings.noteIndexFileName+".md")) {
-			this.toastManager.show("info",`Loading notes from ${this.userSettings.noteIndexFileName}.md`);
-			const noteIdList: string[] = (await NoteUtils.getMarkdownFile(this.userSettings.noteIndexFileName)).split("\n");
+		if (await NoteUtils.doesFileExist(this.userSettings.noteIndexFileName+'.md')) {
+			this.toastManager.show('info',`Loading notes from ${this.userSettings.noteIndexFileName}.md`);
+			const noteIdList: string[] = (await NoteUtils.getMarkdownFile(this.userSettings.noteIndexFileName)).split('\n');
 			for (const noteId of noteIdList) {
-				if (noteId == "") continue;
-				console.log(noteId);
+				if (noteId == '') continue;
 				const newNote = await Note.loadFromFile(noteId);
 				this.notes.push(newNote);
 				notesAdded.push(newNote.id);
 				this.addNoteElements(newNote);
-				
+			}
+			if (notesAdded.length > 0) {
+				const noteTab = document.getElementById(notesAdded[0]) as HTMLInputElement;
+				noteTab.checked = true;
+				this.setCurrentNote(notesAdded[0]);
+				this.updateNoteTitleDisplay();
 			}
 		} else { 
-			this.toastManager.show("error",`Could not find headings file ${this.userSettings.noteIndexFileName}.md`);
+			this.toastManager.show('error',`Could not find headings file ${this.userSettings.noteIndexFileName}.md`);
 		}
 
-		this.setCurrentNote(notesAdded[0]);
-		this.updateNoteTitleDisplay();
 	}
 
 	private async saveNotes(saveAll: boolean = false) {
-		if (!(saveAll || this.isCurrentNoteUnsaved())) return; //!A!B
-		let noteHeadings = "";
+		if (!(saveAll || this.notes[this.activeNoteIndex].isUnsaved())) return;
+		let noteHeadings = '';
 		for (let i = 1; i < this.notes.length; i++) {
 			const note = this.notes[i];
-			noteHeadings += note.id+"\n";
+			noteHeadings += note.id+'\n';
 			note.updatePersistentTextContent(this.persistentTextInput.value);
 			if (saveAll) await note.save();
 
 		}
-		console.log(this.activeNoteIndex);
 		if (!saveAll) {
 			const result = await this.notes[this.activeNoteIndex].save();
-			console.log(result);
 			if (result) {
-				this.toastManager.show("info",`Saved as ${this.notes[this.activeNoteIndex].id}.md`);
+				this.toastManager.show('info',`Saved as ${this.notes[this.activeNoteIndex].id}.md`);
 				await NoteUtils.writeMarkdownFile(this.userSettings.noteIndexFileName,noteHeadings);
 			}
 		}
 		this.updateNoteTitleDisplay();
 	}
 	
-	countLeadingTabs(line): number {
+	private countLeadingTabs(line: string): number {
 		return line.match(new RegExp(`^${this.userSettings.indentString}+`))?.[0].length || 0;
 
 	}
 
-	stripLeadingTabs(line) {
+	private stripLeadingTabs(line: string) {
 		return line.replace(new RegExp(`^${this.userSettings.indentString}+`), '');
 	}
 }
 
-const manager = new Manager();
+type UserSettings = {
+	indentString: string;
+	groupInterval: number;
+	noteIndexFileName: string;
+	toastDuration: number;
+};
+
+const _manager = new Manager();

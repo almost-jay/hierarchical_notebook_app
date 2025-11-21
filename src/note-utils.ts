@@ -1,20 +1,20 @@
-import { appDataDir, BaseDirectory, join } from "@tauri-apps/api/path";
-import { exists, readFile, readTextFile, writeFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import { BaseDirectory } from '@tauri-apps/api/path';
+import { exists, readFile, readTextFile, writeFile, writeTextFile } from '@tauri-apps/plugin-fs';
 
 export class NoteUtils {
-	static slugify(text: string): string {
+	public static slugify(text: string): string {
 		const maxLength = 60;
-		let slug = text
+		const slug = text
 			.toLowerCase()
 			.trim()
-			.normalize("NFD")
-			.replace(/[\u0300-\u036f]/g, "")
-			.replace(/[^a-z0-9]+/g, "-")
-			.replace(/^-+|-+$/g, "");
+			.normalize('NFD')
+			.replace(/[\u0300-\u036f]/g, '')
+			.replace(/[^a-z0-9]+/g, '-')
+			.replace(/^-+|-+$/g, '');
 
 		if (slug.length <= maxLength) return slug;
 
-		const cutoff = slug.lastIndexOf("-", maxLength);
+		const cutoff = slug.lastIndexOf('-', maxLength);
 		if (cutoff > 0) {
 			return slug.slice(0, cutoff);
 		}
@@ -23,7 +23,7 @@ export class NoteUtils {
 	}
 
 
-	static shiftSelectedText(text: string, start: number, end: number, offset: number): string {
+	public static shiftSelectedText(text: string, start: number, end: number, offset: number): string {
 		const lines = text.split('\n');
 		
 		if (text == '' && offset == 1) return '\t'+text; // Quick indentation even when there is no text at all

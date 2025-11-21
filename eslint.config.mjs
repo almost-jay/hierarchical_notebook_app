@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import js from "@eslint/js";
 import { FlatCompat } from "@eslint/eslintrc";
+import sortClassMembers from "eslint-plugin-sort-class-members";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,9 +17,10 @@ const compat = new FlatCompat({
 
 export default defineConfig([{
     extends: compat.extends("eslint:recommended", "plugin:@typescript-eslint/recommended"),
-
+	
     plugins: {
         "@typescript-eslint": typescriptEslint,
+		"sort-class-members": sortClassMembers,
     },
 
     languageOptions: {
@@ -28,6 +30,33 @@ export default defineConfig([{
 	files: ["src/**/*.ts"],
 	
     rules: {
+        "sort-class-members/sort-class-members": ["error", {
+            order: [
+				"[static-properties]",
+				"[properties]",
+				"[conventional-private-properties]",
+                "constructor",
+				"[factory-methods]",
+				"[static-methods]",
+				"[accessor-pairs]",
+				"[getters]",
+				"[setters]",
+				"[conventional-private-methods]",
+				"[everything-else]"
+            ],
+			groups: {
+			"factory-methods": [
+				{ type: "method", static: true, name: "/^(create|from)/", sort: "alphabetical" }
+			],
+			"orchestration-methods": [
+				{ type: "method", accessibility: "public", name: "/^(?!get|is|has|can|set|add|remove).*/", sort: "alphabetical" }
+			]
+			},
+            accessorPairPositioning: "getThenSet",
+        }],
+		
+		"quotes": ["error", "single", { avoidEscape: true }],
+		"indent": ["error", "tab"],
         "@typescript-eslint/explicit-member-accessibility": ["error", {
             accessibility: "explicit",
         }],
@@ -35,13 +64,10 @@ export default defineConfig([{
 		"@typescript-eslint/typedef": ["error",{
 			"variableDeclaration": false,
 			"variableDeclarationIgnoreFunction": true,
-			"memberVariableDeclaration": true
-			
-			},
-			"warn", {
-				"parameter": true,
-				"arrayDestructuring": true,
-				"objectDestructuring": true
+			"memberVariableDeclaration": true,
+			"parameter": true,
+			"arrayDestructuring": true,
+			"objectDestructuring": true
 			}
 		],
 

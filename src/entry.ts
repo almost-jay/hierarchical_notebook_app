@@ -1,13 +1,13 @@
 export class Entry {
-	id: number;
-	groupId: number;
-	text: string;
-	created: Date;
-	indentLevel: number;
-	quotedId?: number;
-	lastEdited?: Date;
+	public id: number;
+	public groupId: number;
+	public text: string;
+	public created: Date;
+	public indentLevel: number;
+	public quotedId?: number;
+	public lastEdited?: Date;
 
-	constructor(id: number, groupId: number, text: string, created: Date, indentLevel: number, lastEdited?: Date, quotedId?: number) {
+	public constructor(id: number, groupId: number, text: string, created: Date, indentLevel: number, lastEdited?: Date, quotedId?: number) {
 		this.id = id;
 		this.groupId = groupId;
 		this.text = text;
@@ -18,16 +18,16 @@ export class Entry {
 	}
 
 	public static fromPartial(partial: Partial<Entry> & { id: number; groupId: number; text: string; created: Date; indentLevel: number }): Entry {
-        return new Entry(
-            partial.id,
-            partial.groupId,
-            partial.text,
-            partial.created,
-            partial.indentLevel,
+		return new Entry(
+			partial.id,
+			partial.groupId,
+			partial.text,
+			partial.created,
+			partial.indentLevel,
 			partial.lastEdited,
-            partial.quotedId,
-        );
-    }
+			partial.quotedId,
+		);
+	}
 
 	public toBinary(): ArrayBuffer {
 		const textBytes = new TextEncoder().encode(this.text);

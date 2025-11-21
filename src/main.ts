@@ -81,35 +81,6 @@ class Manager {
 
 		});
 
-		this.noteTabsContainer.addEventListener('dragstart', (e) => {
-			const targetTab: HTMLDivElement = (e.target as HTMLElement).closest('.tab');
-			if (!targetTab) return;
-			this.draggedTab = targetTab;
-			this.draggedTab.classList.add('dragging');
-			e.dataTransfer!.effectAllowed = 'move';
-		});
-
-		this.noteTabsContainer.addEventListener('dragend', () => {
-			if (this.draggedTab) {
-				this.draggedTab.classList.remove('dragging');
-				this.draggedTab = null;
-			}
-		});
-
-		this.noteTabsContainer.addEventListener('dragover', (e) => {
-			e.preventDefault();
-
-			if (!this.draggedTab) return;
-
-			const target = (e.target as HTMLElement).closest('.tab');
-			if (!target || target == this.draggedTab) return;
-
-			const rect = target.getBoundingClientRect();
-			const isAfter = e.clientY > rect.top + rect.height / 2;
-
-			this.noteTabsContainer.insertBefore(this.draggedTab, isAfter ? target.nextSibling : target);
-		})
-
 		const addNotetab = document.getElementById('add-note-tab') as HTMLDivElement;
 		addNotetab.addEventListener('click', (e) => {
 			e.preventDefault();
@@ -334,6 +305,10 @@ class Manager {
 		noteTabDiv.classList.add('tab');
 		noteTabDiv.draggable = true;
 
+		noteTabDiv.addEventListener('dragstart', this.tabDragStartHandler);
+		noteTabDiv.addEventListener('dragover', this.tabDragOverHandler);
+		noteTabDiv.addEventListener('dragend', this.tabDragEndHandler);
+
 		const radioElement: HTMLInputElement = document.createElement('input');
 		radioElement.type = 'radio';
 		radioElement.id = note.id;
@@ -351,6 +326,35 @@ class Manager {
 
 		radioElement.checked = true;
 		this.logInput.focus();
+	}
+
+	private tabDragStartHandler(event: DragEvent): void {
+		console.log(event.currentTarget);
+		this.draggedTab = event.currentTarget as HTMLDivElement;
+		this.draggedTab.classList.add('dragging');
+	}
+
+	private tabDragOverHandler(event: DragEvent): void {
+		event.preventDefault();
+		console.log('DRAG OVER!!');
+		if (!this.draggedTab) return;
+		console.log(event.currentTarget);
+		const target = event.currentTarget as HTMLElement;
+
+		const rect = target.getBoundingClientRect();
+		const isAfter = event.clientY > rect.top + rect.height / 2;
+
+		target.parentNode!.insertBefore(this.draggedTab, isAfter ? target.nextSibling : target);
+
+		if (target == this.draggedTab) return;
+	}
+
+	private tabDragEndHandler(): void {
+		if (!this.draggedTab) return;
+		console.log(this.draggedTab);
+		this.draggedTab.classList.remove('dragging');
+		this.draggedTab = null;
+
 	}
 
 	private insertNewLine(): void {

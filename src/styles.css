@@ -1,5 +1,5 @@
 @font-face {
-	font-family:  "Material Symbols";	
+	font-family: "Material Symbols";
 	src: url(./assets/MaterialSymbols.ttf);
 }
 
@@ -11,7 +11,7 @@
 }
 
 :root {
-	--font-size: 16px;
+	--font-size: 12pt;
 	--spacing: 8px;
 	--tab-height: 20px;
 	--line-height: 12.5px;
@@ -41,7 +41,8 @@
 	--toast-error-text: #f2efdc;
 }
 
-html, body {
+html,
+body {
 	height: 100%;
 	box-sizing: border-box;
 	font-family: Verdana, Geneva, Tahoma, sans-serif;
@@ -49,9 +50,12 @@ html, body {
 	color: var(--c-text);
 	caret-color: var(--c-text-alt);
 	margin: 0;
+	font-size: var(--font-size);
 }
 
-button, input, textarea {
+button,
+input,
+textarea {
 	box-sizing: border-box;
 	user-select: none;
 	outline: none;
@@ -80,7 +84,8 @@ button:disabled {
 	pointer-events: none;
 }
 
-input, textarea {
+input,
+textarea {
 	padding-left: calc(2 * var(--spacing));
 	font-family: Verdana, Geneva, Tahoma, sans-serif;
 	font-size: var(--font-size);
@@ -90,10 +95,9 @@ input, textarea {
 textarea {
 	white-space: pre-wrap;
 	overflow-wrap: break-word;
-	
 	padding-top: calc(calc(var(--logbox-min-height) / 2) - var(--line-height));
 	padding-bottom: calc(calc(var(--logbox-min-height) / 2) - var(--line-height));
-	line-height: 1.5; /* This means this will break if the line height, font face, anything is changed */
+	line-height: 25px;
 }
 
 div {
@@ -111,7 +115,7 @@ div {
 
 #sidebar {
 	float: left;
-	width: 8vw;
+	width: 9vw;
 	display: flex;
 	flex-shrink: 0;
 	flex-direction: column;
@@ -125,7 +129,8 @@ div {
 	display: none;
 }
 
-#sidebar, .note-tabs {
+#sidebar,
+.note-tabs {
 	margin: 0;
 	padding: 0;
 	display: flex;
@@ -149,7 +154,7 @@ div {
 	pointer-events: all;
 }
 
-.tab:not(:only-of-type) > .tab-label::before {
+.tab:not(:only-of-type)>.tab-label::before {
 	font-family: "Material Symbols";
 	content: "drag_indicator";
 	color: var(--c-dim);
@@ -174,6 +179,7 @@ div {
 }
 
 .tab-label {
+	font-size: 85%;
 	flex-basis: var(--tab-height);
 	background-color: var(--c-background-alt);
 	padding: var(--spacing);
@@ -190,14 +196,15 @@ div {
 	cursor: pointer;
 }
 
-.tab-input:checked + .tab-label {
+.tab-input:checked+.tab-label {
 	cursor: default;
 	background-color: var(--c-background);
 	/* border-top: var(--border-thickness) solid var(--c-border);
 	border-bottom: var(--border-thickness) solid var(--c-border); */
 }
 
-.tab-input:checked + .tab-label::after {  /* This makes the tab "stick out" & cover the border to make it look seamless. */
+.tab-input:checked+.tab-label::after {
+	/* This makes the tab "stick out" & cover the border to make it look seamless. */
 	position: absolute;
 	height: calc(var(--tab-height) + var(--spacing) + var(--border-thickness));
 	top: 0px;
@@ -221,7 +228,7 @@ div {
 	cursor: pointer;
 }
 
-#overview-tab.input:checked + {
+#overview-tab.input:checked+ {
 	cursor: default;
 	background-color: var(--c-background);
 }
@@ -252,14 +259,16 @@ div {
 	/* border: var(--border-thickness) solid var(--c-border); */
 	border-radius: calc(2 * var(--corner-round));
 	width: 60vw;
+	height: auto;
 	display: flex;
-	flex-flow: column nowrap;
-	justify-content: space-between;
+	flex-direction: column;
 	resize: horizontal;
-	overflow-y: auto;
+	overflow: hidden;
 }
 
 .note-heading {
+	flex: 1;
+	flex-shrink: 0;
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
@@ -270,6 +279,7 @@ div {
 }
 
 #note-title {
+	flex-shrink: 0;
 	margin-left: var(--indentation);
 	font-size: 125%;
 	vertical-align: middle;
@@ -299,7 +309,7 @@ div {
 
 .overview-date-controls {
 	display: flex;
-	width:max-content;
+	width: max-content;
 	gap: var(--spacing);
 }
 
@@ -311,13 +321,15 @@ div {
 	cursor: pointer;
 }
 
-#start-date-selector::after { /* Replace the regular calendar icon with one from the same icon library */
+#start-date-selector::after {
+	/* Replace the regular calendar icon with one from the same icon library */
 	position: relative;
 	font-family: "Material Symbols";
 	content: "date_range";
 	pointer-events: none;
 	font-size: 150%;
-	right: -10px; /* TODO: Does this need to be a different value/unit */
+	right: -10px;
+	/* TODO: Does this need to be a different value/unit */
 	margin-right: calc(var(--spacing) / 2);
 }
 
@@ -328,6 +340,17 @@ div {
 
 #date-range-selector {
 	width: calc(var(--logbox-min-height) + 1vw);
+}
+
+#log-container {
+	display: flex;
+	flex-direction: column;
+	height: calc(100% - 12vh);
+}
+
+#entry-container {
+	overflow-y: auto;
+	flex: 1;
 }
 
 .entry {
@@ -342,11 +365,13 @@ div {
 	text-align: right;
 	font-size: 75%;
 	color: var(--c-dim);
-	height: 0; /* Flatten this so that it appears in line with the 1st line of the entry */
+	height: 0;
+	/* Flatten this so that it appears in line with the 1st line of the entry */
 	margin: 0;
 }
 
-.entry-text { /* This is applied to all text in the entry. */
+.entry-text {
+	/* This is applied to all text in the entry. */
 	border-radius: 0;
 	border-radius: none;
 	margin-bottom: 0;
@@ -361,9 +386,9 @@ div {
 	background-color: var(--c-background-light);
 }
 
-  .entry-text:hover::before {
+.entry-text:hover::before {
 	background-color: var(--c-background-light);
-  }
+}
 
 .disclosure-widget {
 	margin-right: 6px;
@@ -373,7 +398,7 @@ div {
 	color: var(--c-dim);
 }
 
-.entry-text:not(.collapsed) > .disclosure-widget::before {
+.entry-text:not(.collapsed)>.disclosure-widget::before {
 	content: "keyboard_arrow_down";
 	display: inline;
 }
@@ -382,26 +407,30 @@ div {
 	color: var(--c-text);
 }
 
-.entry-text.collapsed > .disclosure-widget::before {
+.entry-text.collapsed>.disclosure-widget::before {
 	content: "keyboard_arrow_right";
 	display: inline;
 }
 
-.entry-text > div.entry-text { /* This is only applied to entries that are not at the topmost level. */
+.entry-text>div.entry-text {
+	/* This is only applied to entries that are not at the topmost level. */
 	border-left: calc(var(--border-thickness) / 2) solid var(--c-dim-alt);
-	margin-left: 8px; /* TODO: Check if this should be set dynamically instead. Decrease to move the border leftwards */
+	margin-left: 8px;
+	/* TODO: Check if this should be set dynamically instead. Decrease to move the border leftwards */
 	padding-left: var(--indentation);
 }
 
-.entry-text.collapsed > div.entry-text {
+.entry-text.collapsed>div.entry-text {
 	display: none;
 }
 
-.disclosure-widget:hover ~ .entry-text { /* When a disclosure-widget is hovered over, it highlights the borders of the children below it. */
+.disclosure-widget:hover~.entry-text {
+	/* When a disclosure-widget is hovered over, it highlights the borders of the children below it. */
 	border-left-color: var(--c-dim);
 }
 
 .log-input-container {
+	flex-shrink: 0;
 	padding-top: var(--spacing);
 	display: flex;
 	gap: var(--spacing);
@@ -419,10 +448,9 @@ div {
 .log-input-container textarea {
 	flex-grow: 1;
 	resize: none;
-	overflow-y: auto;
 	min-height: var(--logbox-min-height);
 	height: var(--logbox-min-height);
-	
+
 }
 
 @supports(field-sizing: content) {
@@ -525,4 +553,51 @@ div {
 .toast.error::before {
 	color: var(--toast-error-border);
 	content: "error";
+}
+
+
+#note-selection-modal {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background: rgba(0, 0, 0, 0.4);
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	z-index: 1000;
+}
+
+#note-selection-modal[hidden] {
+	display: none;
+}
+
+.modal-content {
+	background: var(--c-background-light);
+	padding: var(--spacing);
+	display: flex;
+	flex-direction: column;
+	width: 20vw;
+	border-radius: calc(2 * var(--corner-round));
+}
+
+#unopened-notes-list {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	overflow-y: auto;
+	flex: 1;
+}
+
+#unopened-notes-list li {
+	border-radius: var(--corner-round);
+	color: var(--c-dim);
+	padding: var(--spacing);
+	cursor: pointer;
+}
+
+#unopened-notes-list li.hovered {
+	background-color: var(--c-border);
+	color: var(--c-text);
 }

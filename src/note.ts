@@ -25,7 +25,7 @@ export class Note {
 	public static async loadFromFile(noteId: string): Promise<Note> {
 		const persistentFileName: string = `${noteId}-persistent`;
 		const entriesFileName: string = `${noteId}-entries`;
-		if(NoteUtils.doesFileExist(persistentFileName+'.md')) {
+		if (await NoteUtils.doesFileExist(persistentFileName+'.md')) {
 			const fileText: string = await NoteUtils.getMarkdownFile(persistentFileName);
 			const title = fileText.match(/title:\s*(.+)/)?.[1] ?? '';
 			const created = new Date(Number(fileText.match(/created:\s*(\d+)/)?.[1] ?? '0'));
@@ -38,7 +38,7 @@ export class Note {
 			newNote.updatePersistentTextContent(textContent);
 			newNote.isTitleSet = true;
 
-			if (NoteUtils.doesFileExist(entriesFileName+'.bin')) {
+			if (await NoteUtils.doesFileExist(entriesFileName+'.bin')) {
 				const entryFile = await NoteUtils.getBinaryFile(entriesFileName);
 				const dataView = new DataView(entryFile);
 				let i = 0;

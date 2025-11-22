@@ -11,8 +11,8 @@
     "fs:allow-exists",
     "fs:allow-appdata-read",
     "fs:allow-appdata-write",
-    "fs:allow-config-read",
-    "fs:allow-cache-read",
-    "fs:allow-cache-write"
+    "fs:allow-appconfig-read",
+    "fs:allow-appcache-read",
+    "fs:allow-appcache-write"
   ]
 }

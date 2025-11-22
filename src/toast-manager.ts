@@ -1,6 +1,6 @@
 export class ToastManager {
 	private container: HTMLDivElement;
-	private readonly TOAST_TYPES: string[] = ['error', 'info', 'warning'];
+	private readonly TOAST_TYPES: string[] = ['error', 'info', 'warn'];
 	private toastDuration: number;
 
 	public constructor(toastDuration: number) {

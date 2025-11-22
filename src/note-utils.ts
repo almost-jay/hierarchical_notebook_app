@@ -44,6 +44,11 @@ export class NoteUtils {
 		return lines.join('\n');
 	}
 
+	public static async doesFileExist(filename: string): Promise<boolean> {
+		const result = await exists(filename, { baseDir: BaseDirectory.AppData });
+		return result;
+	}
+
 	public static async getMarkdownFile(filename: string): Promise<string> {
 		const content = await readTextFile(`${filename}.md`, { baseDir: BaseDirectory.AppData } );
 		return content;
@@ -62,9 +67,32 @@ export class NoteUtils {
 		await writeFile(`${filename}.bin`, content, { baseDir: BaseDirectory.AppData } );
 	}
 
-	public static async doesFileExist(filename: string): Promise<boolean> {
-		const result = await exists(filename, { baseDir: BaseDirectory.AppData });
+	public static async doesCacheExist(filename: string): Promise<boolean> {
+		const result = await exists(filename, { baseDir: BaseDirectory.AppCache });
 		return result;
+	}
+
+	public static async readCache(filename: string): Promise<string> {
+		const content = await readTextFile(`${filename}.json`, { baseDir: BaseDirectory.AppCache });
+		return content;
+	}
+
+	public static async writeCache(filename: string, content: string): Promise<void> {
+		await writeTextFile(`${filename}.json`, content, { baseDir: BaseDirectory.AppCache });
+	}
+
+	public static async doesConfigExist(filename: string): Promise<boolean> {
+		const result = await exists(filename, { baseDir: BaseDirectory.AppConfig });
+		return result;
+	}
+
+	public static async readConfig(filename: string): Promise<string> {
+		const content = await readTextFile(`${filename}.json`, { baseDir: BaseDirectory.AppConfig });
+		return content;
+	}
+
+	public static async writeConfig(filename: string, content: string): Promise<void> { // CHECK: UNUSED CURRENTLY
+		await writeTextFile(`${filename}.json`, content, { baseDir: BaseDirectory.AppConfig });
 	}
 
 	public static formatDate(date: Date): string {

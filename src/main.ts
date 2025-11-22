@@ -3,8 +3,13 @@ import { Note } from './note';
 import { NoteUtils } from './note-utils';
 import { Overview } from './overview';
 import { ToastManager } from './toast-manager';
+import { NoteSelector } from './note-selector';
+
+const CONFIG_FILENAME = 'config';
 
 class Manager {
+	private unopenedNotes: string[] = [];
+	private openNotes: string[] = [];
 	private notes: Note[] = [];
 	private overview: Overview;
 	private activeNoteIndex: number;
@@ -12,9 +17,12 @@ class Manager {
 		indentString: '\t',
 		groupInterval: 5, // minutes
 		noteIndexFileName: '.note-headings',
-		toastDuration: 3000, //ms
-		dragHandleWidth: 20, //px
+		cacheFileName: 'session',
+		toastDuration: 3000, // ms
+		dragHandleWidth: 20, // px
+		maxTabTitleLength: 30, // chars
 	};
+	private cachedData: SessionData;
 	private noteTabsContainer: HTMLDivElement;
 	private logInput: HTMLTextAreaElement;
 	private persistentTextInput: HTMLTextAreaElement;
@@ -22,10 +30,12 @@ class Manager {
 	private toastManager: ToastManager;
 
 	private draggedTab: HTMLDivElement | null = null;
+	private noteSelector: NoteSelector
 
 	public constructor() {
+		this.loadUserSettings();
+
 		this.noteTabsContainer = document.getElementById('note-tabs') as HTMLDivElement;
-		this.toastManager = new ToastManager(this.userSettings.toastDuration);
 		this.logInput = document.getElementById('log-input') as HTMLTextAreaElement;
 		this.persistentTextInput = document.getElementById('persistent-text-input') as HTMLTextAreaElement;
 
@@ -34,15 +44,30 @@ class Manager {
 		this.updateOverview();
 		this.initialiseInput();
 		// TODO: Also store and fetch user settings
-		// TODO: Also cache and load data
+		this.restorePreviousSession();
+
+		this.toastManager = new ToastManager(this.userSettings.toastDuration);
+		this.noteSelector = new NoteSelector((noteId) => {
+			this.openNote(noteId, true);
+		});
+
+	}
+
+	private async loadUserSettings(): Promise<void> {
+		if (await NoteUtils.doesConfigExist(CONFIG_FILENAME)) {
+			const configText = await NoteUtils.readConfig(CONFIG_FILENAME);
+			const configParsed = JSON.parse(configText) as Partial<UserSettings>;
+
+			this.userSettings = {...this.userSettings, ...configParsed };
+		}
 	}
 
 	private initialiseNotes(): void {
 
 		// TODO: Load a note from the dang cache
 		// Also the overview is in Notes
-		this.loadAllNotes(); 
 		this.noteTabsContainer.innerHTML = '';
+		this.loadAllNotes(); 
 		// FOR i in note
 		// do:
 		// uhhh render it or sum idfk
@@ -58,16 +83,26 @@ class Manager {
 	}
 
 	private initialiseInput(): void {
+		window.addEventListener('beforeunload', (e) => {
+			this.writeToCache();
+			if (this.isAnythingUnsaved()) {
+				if (!confirm('Close without saving?')) e.preventDefault();
+			}
+		});
 		window.addEventListener('keydown', (e) => {
 			if (this.draggedTab) return;
 			if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() == 's') {
 				e.preventDefault();
 				this.saveNotes(e.shiftKey); // Saves all notes on Ctrl + Shift + S, and just the active one on Ctrl + S
-			} else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
+			} else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') { // Ctrl + N to make a new note
 				e.preventDefault();
 				this.addNewNote(`Untitled ${this.notes.length}`);
 				this.setCurrentNote(this.notes[this.notes.length - 1].id);
+			} else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() == 'o') { // Ctrl + O to open a note
+				this.noteSelector.showModal(this.unopenedNotes);
+	
 			}
+			
 		});
 
 		this.persistentTextInput.addEventListener('keyup', (e) => {
@@ -212,10 +247,33 @@ class Manager {
 
 	}
 
+	private async restorePreviousSession(): Promise<void> {
+		this.cachedData = {
+			currentNoteId: this.notes[this.activeNoteIndex] ? this.notes[this.activeNoteIndex].id : '.overview',
+			unsavedEntries: {},
+			unsavedPersistentText: {},
+			openNotes: [],
+		}
+
+		if (NoteUtils.doesCacheExist(this.userSettings.cacheFileName)) {
+			const cacheText = await NoteUtils.readCache(this.userSettings.cacheFileName);
+			const cacheParsed = JSON.parse(cacheText) as Partial<SessionData>;
+			this.cachedData = { ...this.cachedData, ...cacheParsed };
+			this.toastManager.show('info','Session restored')
+		}
+
+		for (const openNoteId of this.cachedData.openNotes) {
+			this.openNote(openNoteId, false);
+		}
+		this.setCurrentNote(this.cachedData.currentNoteId);
+
+		
+	}
+
 	private displayCurrentEntries(): void {
 		if (this.activeNoteIndex == null) return; // TODO
 		
-		this.updateNoteTitleDisplay();
+		this.updateNoteSaveState();
 
 		const entriesContainer = document.getElementById('entry-container') as HTMLDivElement;
 		entriesContainer.innerHTML = '';
@@ -306,12 +364,12 @@ class Manager {
 		if (this.activeNoteIndex == 0) {
 			overviewControls.classList.remove('show');
 		}
-
+		
 		this.activeNoteIndex = this.notes.findIndex(note => note.id === noteId);
 
 		if (!this.notes[this.activeNoteIndex]) return; // TODO
-
-		this.updateNoteTitleDisplay();
+		this.cachedData.currentNoteId = noteId;
+		this.updateNoteSaveState();
 
 		if (this.activeNoteIndex == 0) {
 			overviewControls.classList.add('show');
@@ -329,6 +387,7 @@ class Manager {
 	private addNewNote(noteTitle: string): Note { // TODO: make sure there is enough space for the note?
 		const newNote = new Note(noteTitle);
 		this.notes.push(newNote);
+		this.openNotes.push(newNote.id);
 		this.activeNoteIndex = this.notes.length - 1;
 
 		this.addNoteElements(newNote);
@@ -336,14 +395,27 @@ class Manager {
 		return newNote;
 	}
 
-	private updateNoteTitleDisplay(): void {
+	private updateNoteSaveState(): void {
 		if (!this.notes[this.activeNoteIndex]) return; // CHECK: Should we display a save indicator for the Overview as well?
 		
 		const isUnsaved = this.notes[this.activeNoteIndex].isUnsaved();
 		const noteTitle = document.getElementById('note-title');
 		const noteLabel = document.querySelector(`label[for="${this.notes[this.activeNoteIndex].id}"]`);
 		noteTitle.textContent = (isUnsaved ? '* ' : '') + this.notes[this.activeNoteIndex].title;
-		if (this.activeNoteIndex > 0) noteLabel.textContent = (isUnsaved ? '* ' : '') + this.notes[this.activeNoteIndex].title;
+		if (this.activeNoteIndex > 0) noteLabel.textContent = (isUnsaved ? '* ' : '') + (this.notes[this.activeNoteIndex].title).slice(0,this.userSettings.maxTabTitleLength);
+		if (this.notes[this.activeNoteIndex].title.length > this.userSettings.maxTabTitleLength) noteLabel.textContent += '...';
+		if (isUnsaved) this.cachedData.unsavedPersistentText[this.notes[this.activeNoteIndex].id] = this.notes[this.activeNoteIndex].getPersistentTextContent();
+	}
+
+	private isAnythingUnsaved(): boolean {
+		let result = false;
+		for (const note of this.notes) {
+			if (note.isUnsaved()) {
+				result = true;
+				break;
+			}
+		}
+		return result;
 	}
 
 
@@ -391,7 +463,7 @@ class Manager {
 		if (!this.notes[this.activeNoteIndex]) return;
 
 		this.notes[this.activeNoteIndex].updatePersistentTextContent(this.persistentTextInput.value);
-		this.updateNoteTitleDisplay();
+		this.updateNoteSaveState();
 	}
 
 	private submitEntry(): void {
@@ -419,6 +491,9 @@ class Manager {
 		const newEntry = new Entry(entries ? entries.length : 0, groupId, entryText, currentTime, indentLevel);
 		note.addEntry(newEntry);
 
+		if (!this.cachedData.unsavedEntries[note.id]) this.cachedData.unsavedEntries[note.id] = [];
+		this.cachedData.unsavedEntries[note.id].push(newEntry);
+
 		// TODO: Verify that the entry was submitted before clearing textarea
 
 		this.logInput.value = (this.userSettings.indentString).repeat(indentLevel);
@@ -443,7 +518,6 @@ class Manager {
 		// If it does, we will add new notes
 		const notesAdded = [];
 		if (await NoteUtils.doesFileExist(this.userSettings.noteIndexFileName+'.md')) {
-			this.toastManager.show('info',`Loading notes from ${this.userSettings.noteIndexFileName}.md`);
 			const noteIdList: string[] = (await NoteUtils.getMarkdownFile(this.userSettings.noteIndexFileName)).split('\n');
 			for (const noteId of noteIdList) {
 				if (noteId == '') continue;
@@ -455,44 +529,84 @@ class Manager {
 					this.overview = newOverview;
 				} else {
 					const newNote = await Note.loadFromFile(noteId);
-					if (!newNote) this.toastManager.show('error',`Could not load note ${noteId}`);
-					this.notes.push(newNote);
-					notesAdded.push(newNote.id);
-					this.addNoteElements(newNote);
+					if (newNote) {
+						this.notes.push(newNote);
+						notesAdded.push(newNote.id);
+					} else {
+						this.toastManager.show('error',`Could not load note ${noteId}`);
+					}
 				}
 			}
 			if (notesAdded.length > 0) {
-				const noteTab = document.getElementById(notesAdded[0]) as HTMLInputElement;
-				noteTab.checked = true;
-				this.setCurrentNote(notesAdded[0]);
-				this.updateNoteTitleDisplay();
+				this.unopenedNotes = notesAdded;
+				this.updateNoteSaveState(); // CHECK: Is this necessary
+				this.toastManager.show('info',`Loaded all notes from ${this.userSettings.noteIndexFileName}.md`);
+			} else {
+				this.setCurrentNote('.overview');
 			}
 		} else { 
 			this.toastManager.show('error',`Could not find headings file ${this.userSettings.noteIndexFileName}.md`);
+			this.setCurrentNote('.overview');
 		}
+	}
 
+	public openNote(noteId: string, setCurrentNote: boolean = false): void {
+		if (this.unopenedNotes.includes(noteId)) {
+			const unopenedNotesIndex = this.unopenedNotes.indexOf(noteId);
+			this.unopenedNotes.splice(unopenedNotesIndex, 1);
+			this.openNotes.push(noteId);
+
+			const noteIndex = this.notes.findIndex(note => note.id === noteId);
+			const note = this.notes[noteIndex];
+			this.addNoteElements(note);
+			if (setCurrentNote) {
+				const noteTab = document.getElementById(noteId) as HTMLInputElement;
+				noteTab.checked = true;
+				this.setCurrentNote(noteId);
+			}
+		} else {
+			this.toastManager.show('error',`Could not find note with id ${noteId}`);
+		}
+	}
+
+	private async writeToCache(): Promise<void> {
+		await NoteUtils.writeCache(this.userSettings.cacheFileName, JSON.stringify(this.cachedData, null, 2));
 	}
 
 	private async saveNotes(saveAll: boolean = false): Promise<void> {
 		if (!(saveAll || this.notes[this.activeNoteIndex].isUnsaved())) return;
-		let noteHeadings = '';
+		let wasSaveSuccessful = false;
 		for (let i = 0; i < this.notes.length; i++) {
 			const note = this.notes[i];
-			noteHeadings += note.id+'\n';
 			note.updatePersistentTextContent(this.persistentTextInput.value);
-			if (saveAll) await note.save();
-
-		}
-		if (!saveAll) {
-			const result = await this.notes[this.activeNoteIndex].save();
-			if (result) {
-				this.toastManager.show('info',`Saved as ${this.notes[this.activeNoteIndex].id}.md`);
-				await NoteUtils.writeMarkdownFile(this.userSettings.noteIndexFileName,noteHeadings);
+			const currentId = note.id;
+			if (saveAll || currentId == this.notes[this.activeNoteIndex].id) {
+				const result = await note.save();
+				if (result) {
+					wasSaveSuccessful = true;
+					if (note.id != currentId) {
+						this.openNotes[this.openNotes.indexOf(currentId)] = note.id;
+						this.updateNoteTabsId(currentId, note.id, note.title);
+						if (!saveAll) this.toastManager.show('info',`Saved as ${this.notes[this.activeNoteIndex].id}.md`);
+				
+					}
+				}
 			}
-		} else {
-			this.toastManager.show('info','Saved all notes');
 		}
-		this.updateNoteTitleDisplay();
+		const noteHeadings = this.openNotes.join('\n') + this.unopenedNotes.join('\n');
+		await NoteUtils.writeMarkdownFile(this.userSettings.noteIndexFileName,noteHeadings);
+		this.updateNoteSaveState();
+		await this.writeToCache();
+		if (saveAll && wasSaveSuccessful) this.toastManager.show('info','Saved all notes');
+	}
+
+	private updateNoteTabsId(oldId: string, newId: string, newTitle: string): void {
+		const noteRadio = document.getElementById(oldId) as HTMLInputElement;
+		const noteLabel = document.querySelector(`label[for="${oldId}"]`) as HTMLLabelElement;
+
+		noteRadio.id = newId;
+		noteLabel.htmlFor = newId;
+		noteLabel.textContent = newTitle.slice(0,this.userSettings.maxTabTitleLength);
 	}
 	
 	private countLeadingTabs(line: string): number {
@@ -505,12 +619,25 @@ class Manager {
 	}
 }
 
+interface SessionData {
+	currentNoteId: string;
+	unsavedEntries: Record<string, Entry[]>;
+	unsavedPersistentText: Record<string, string>;
+	openNotes: string[];
+	// TODO: Also save:
+		// Expanded or collapsed hierarchies
+		// Scroll position
+		// Cursor position in notepad
+}
+
 type UserSettings = {
 	indentString: string;
 	groupInterval: number;
 	noteIndexFileName: string;
+	cacheFileName: string;
 	toastDuration: number;
 	dragHandleWidth: number;
+	maxTabTitleLength: number;
 };
 
 const _manager = new Manager();

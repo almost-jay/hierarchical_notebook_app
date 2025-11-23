@@ -38,6 +38,7 @@ export class NoteSelector {
 				this.displayNotesList();
 				break;
 			case 'Enter':
+				e.preventDefault();
 				this.selectCurrent();
 				break;
 			case 'Escape':
@@ -69,14 +70,12 @@ export class NoteSelector {
 	}
 
 	private displayNotesList(): void {
-		console.log(this.currentIndex);
 		this.listContainer.innerHTML = '';
 		this.filteredNotes.forEach((note, i) => {
 			const li = document.createElement('li');
 			li.textContent = note;
 			if (i == this.currentIndex)  {
 				li.classList.add('hovered');
-				console.log('Show');
 			}
 			li.addEventListener('mouseover', () => {
 				this.currentIndex = i;

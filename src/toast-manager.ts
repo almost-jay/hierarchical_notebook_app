@@ -1,7 +1,18 @@
 export class ToastManager {
-	private container: HTMLDivElement;
 	private readonly TOAST_TYPES: string[] = ['error', 'info', 'warn'];
+	private readonly DEBUG_COLOURS: Readonly<{
+		error: string;
+		info: string;
+		warn: string;
+		}> = {
+			error: '#a8393b',
+			info:  '#526b7c',
+			warn:  '#eb6b50',
+		};
+
+	private container: HTMLDivElement;
 	private toastDuration: number;
+	private debug: boolean;
 
 	public constructor(toastDuration: number) {
 		this.toastDuration = toastDuration;
@@ -9,6 +20,9 @@ export class ToastManager {
 		container.className = 'toast-container';
 		document.body.appendChild(container);
 		this.container = container;
+
+		this.debug = true;
+		this.debug = true;
 	}
 
 	public show(type: string, message: string): void {
@@ -17,6 +31,10 @@ export class ToastManager {
 		toast.classList.add('toast',toast_type);
 		toast.textContent = message;
 		this.container.appendChild(toast);
+
+		if (this.debug) {
+			console.log('%cToast message: '+message,'color: '+this.DEBUG_COLOURS[type]);
+		}
 
 		requestAnimationFrame(() => toast.classList.add('show'));
 

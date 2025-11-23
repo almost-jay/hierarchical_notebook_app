@@ -7,15 +7,14 @@ export class Note {
 	public entries: Entry[] = [];
 	public created: Date;
 	public lastSaved?: Date;
-	protected isEntriesUnsaved: boolean = true;
+	protected isEntriesUnsaved: boolean = false;
 	protected isPersistentTextUnsaved: boolean = true;
 	protected isTitleSet: boolean;
 	private persistentText: string = '';
 	private savedPersistentText: string = '';
 
 	public constructor(title: string, created?: Date, lastSaved?: Date, savedPersistentText?: string) {
-		this.title = title;
-		this.id = NoteUtils.slugify(title);
+		this.updateTitle(title);
 		this.isTitleSet = false;
 		this.created = created ?? new Date();
 		if (lastSaved) this.lastSaved = lastSaved;
@@ -35,7 +34,7 @@ export class Note {
 			const textContent = textContentMatch ? textContentMatch[1].trim() : '';
 			
 			const newNote = new Note(title, created, lastSaved, textContent);
-			newNote.updatePersistentTextContent(textContent);
+			newNote.updateSavedPersistentTextContent(textContent);
 			newNote.isTitleSet = true;
 
 			if (await NoteUtils.doesFileExist(entriesFileName+'.bin')) {
@@ -44,19 +43,13 @@ export class Note {
 				let i = 0;
 
 				while (i < entryFile.byteLength) {
-					const id = dataView.getUint16(i + 0);
-					const groupId = dataView.getUint16(i + 2);
-					const quotedId = dataView.getUint16(i + 4);
-					const indentLevel = dataView.getUint8(i + 6);
-					const created = new Date(Number(dataView.getBigUint64(i + 7)));
-					const lastEdited = new Date(Number(dataView.getBigUint64(i + 15)));
 					const textLength = dataView.getUint16(i + 23);
-					const text = new TextDecoder('utf-8').decode(entryFile.slice(i + 25, i + 25 + textLength)); // ? Should this be split across multiple lines
-
-					newNote.addEntry(new Entry(id, groupId, text, created, indentLevel, lastEdited, quotedId));
+					const entryLength = i + 25 + textLength;
+					const newEntry = Entry.fromBinary(entryFile.slice(i, entryLength));
+					newNote.addEntry(newEntry)
 					i += 25 + textLength;
 				}
-				newNote.isEntriesUnsaved = false;
+
 				return newNote;
 			} else {
 				console.error(`Could not find entries file ${entriesFileName}!`);
@@ -66,6 +59,10 @@ export class Note {
 		}
 	}
 
+	public updateTitle(newTitle: string): void {
+		this.title = newTitle;
+		this.id = NoteUtils.slugify(newTitle);
+	}
 
 	public isUnsaved(): boolean {
 		return this.isPersistentTextUnsaved || this.isEntriesUnsaved;
@@ -77,8 +74,13 @@ export class Note {
 
 	public updatePersistentTextContent(textContent: string): void {
 		this.persistentText = textContent;
+		
+		this.isPersistentTextUnsaved = !(this.persistentText == this.savedPersistentText);
+	}
 
-		this.isPersistentTextUnsaved = this.persistentText != this.savedPersistentText;
+	public updateSavedPersistentTextContent(textContent: string): void {
+		this.savedPersistentText = textContent;
+		this.updatePersistentTextContent(textContent);
 	}
 
 	public async save(): Promise<boolean> {
@@ -112,11 +114,10 @@ export class Note {
 			entriesAsBinary.set(new Uint8Array(buffer), offset);
 			offset += buffer.byteLength;
 		}
-		
 
 		this.lastSaved = new Date();
-		const frontmatter: string = `---\ntitle: ${this.title}\ncreated: ${this.created.getTime()}\nlastSaved: ${this.lastSaved.getTime()}---`;
-
+		const frontmatter: string = `---\ntitle: ${this.title}\ncreated: ${this.created.getTime()}\nlastSaved: ${this.lastSaved.getTime()}\n---\n`;
+		console.log(frontmatter + this.persistentText);
 		await NoteUtils.writeMarkdownFile(persistentFileName, frontmatter + this.persistentText);
 		await NoteUtils.writeBinaryFile(entriesFileName, entriesAsBinary);
 

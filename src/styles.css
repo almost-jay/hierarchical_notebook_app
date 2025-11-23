@@ -100,6 +100,11 @@ textarea {
 	line-height: 25px;
 }
 
+textarea:read-only {
+	background-color: var(--c-background);
+	color: var(--c-text-alt);
+}
+
 div {
 	margin: var(--spacing);
 }
@@ -279,13 +284,23 @@ div {
 }
 
 #note-title {
-	flex-shrink: 0;
+	padding: 0;
+	flex-shrink: 2;
+	flex-grow: 1;
+	margin: var(--spacing);
 	margin-left: var(--indentation);
 	font-size: 125%;
-	vertical-align: middle;
+	background-color: var(--c-background);
+	display: block;
+	min-width: 10vw;
+}
+
+#note-title:focus-within {
+	background-color: var(--c-background-light);
 }
 
 .note-controls {
+	flex-shrink: 0;
 	display: flex;
 	gap: var(--spacing);
 }
@@ -300,11 +315,13 @@ div {
 }
 
 .overview-controls.show {
+	flex-grow: 1;
+	flex-shrink: 0.5;
 	display: flex;
 	gap: var(--spacing);
 	justify-content: space-between;
-	width: 50%;
 	align-items: center;
+	margin-right: calc(2 * var(--spacing))
 }
 
 .overview-date-controls {

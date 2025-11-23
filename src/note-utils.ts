@@ -68,7 +68,7 @@ export class NoteUtils {
 	}
 
 	public static async doesCacheExist(filename: string): Promise<boolean> {
-		const result = await exists(filename, { baseDir: BaseDirectory.AppCache });
+		const result = await exists(`${filename}.json`, { baseDir: BaseDirectory.AppCache });
 		return result;
 	}
 

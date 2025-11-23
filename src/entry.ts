@@ -29,6 +29,20 @@ export class Entry {
 		);
 	}
 
+	public static fromBinary(file: ArrayBuffer): Entry {
+		const dataView = new DataView(file)
+		const id = dataView.getUint16(0);
+		const groupId = dataView.getUint16(2);
+		const quotedId = dataView.getUint16(4);
+		const indentLevel = dataView.getUint8(6);
+		const created = new Date(Number(dataView.getBigUint64(7)));
+		const lastEdited = new Date(Number(dataView.getBigUint64(15)));
+		const textLength = dataView.getUint16(23);
+		const text = new TextDecoder('utf-8').decode(file.slice(25, 25 + textLength)); // ? Should this be split across multiple lines
+
+		return new Entry(id, groupId, text, created, indentLevel, lastEdited, quotedId);
+	}
+
 	public toBinary(): ArrayBuffer {
 		const textBytes = new TextEncoder().encode(this.text);
 		const textLength = textBytes.byteLength;

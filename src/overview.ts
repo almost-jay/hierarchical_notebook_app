@@ -16,7 +16,6 @@ export class Overview extends Note {
 		this.currentDate = DateRange.convertFromDate(new Date());
 		this.selectedDateRange = new DateRange(new Date())
 		this.isPersistentTextUnsaved = false;
-		this.isEntriesUnsaved = false;
 		this.isTitleSet = true;
 	}
 
@@ -31,16 +30,10 @@ export class Overview extends Note {
 			let i = 0;
 
 			while (i < entryFile.byteLength) {
-				const id = dataView.getUint16(i + 0);
-				const groupId = dataView.getUint16(i + 2);
-				const quotedId = dataView.getUint16(i + 4);
-				const indentLevel = dataView.getUint8(i + 6);
-				const created = new Date(Number(dataView.getBigUint64(i + 7)));
-				const lastEdited = new Date(Number(dataView.getBigUint64(i + 15)));
 				const textLength = dataView.getUint16(i + 23);
-				const text = new TextDecoder('utf-8').decode(entryFile.slice(i + 25, i + 25 + textLength)); // ? Should this be split across multiple lines
-
-				newOverview.addEntry(new Entry(id, groupId, text, created, indentLevel, lastEdited, quotedId));
+				const entryLength = i + 25 + textLength;
+				const newEntry = Entry.fromBinary(entryFile.slice(i, entryLength));
+				newOverview.addEntry(newEntry)
 				i += 25 + textLength;
 			}
 
@@ -83,7 +76,7 @@ export class Overview extends Note {
 			aggregatedEntries[day].push(clonedEntry);
 			previousEntryWrapper = entryWrapper;
 		}
-		return aggregatedEntries
+		return aggregatedEntries;
 	}
 
 	public addEntry(newEntry: Entry): void {

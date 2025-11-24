@@ -91,7 +91,7 @@ export class NoteSelector {
 		});
 
 		const selected = this.filterBox.querySelector('.hovered') as HTMLElement | null;
-		if (selected) selected.scrollIntoView({ block: 'nearest' });
+		if (selected) selected.scrollIntoView({ block: 'nearest' }); // this makes the selected element scroll into view
 	}
 
 	private hideModal(): void {

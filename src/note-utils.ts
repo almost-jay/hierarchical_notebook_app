@@ -95,9 +95,14 @@ export class NoteUtils {
 		await writeTextFile(`${filename}.json`, content, { baseDir: BaseDirectory.AppConfig });
 	}
 
-	public static formatDate(date: Date): string {
-		return `${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')} ${date.getFullYear()}-${(date.getMonth()+1).toString().padStart(2,'0')}-${date.getDate().toString().padStart(2,'0')}`;
+	public static formatDateTime(date: Date): string {
+		const result = `${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')} ${date.getFullYear()}-${(date.getMonth()+1).toString().padStart(2,'0')}-${date.getDate().toString().padStart(2,'0')}`;
+		return result;
 
+	}
+
+	public static formatDate(date: Date): string {
+		return date.toISOString().slice(0,10);
 	}
 
 	public static countLeadingTabs(line: string, indentString: string): number {
@@ -109,5 +114,14 @@ export class NoteUtils {
 		return line.replace(new RegExp(`^${indentString}+`), '');
 	}
 
+	public static addDaysToDate(date: Date, days: number): Date {
+		const result = new Date(date.setDate(date.getDate() + days));
+		return result;
+	}
+
+	public static addDaysToDateString(date: string, days: number): string {
+		const result = NoteUtils.formatDate(new Date(new Date(date).setDate(new Date(date).getDate() + days)));
+		return result;
+	}
 
 }

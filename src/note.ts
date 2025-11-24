@@ -8,22 +8,21 @@ export class Note {
 	public created: Date;
 	public lastSaved?: Date;
 	protected isEntriesUnsaved: boolean = false;
-	protected isPersistentTextUnsaved: boolean = true;
-	protected isTitleSet: boolean;
+	protected isPersistentTextUnsaved: boolean = false;
+	protected isTitleSet: boolean = false;
 	private persistentText: string = '';
 	private savedPersistentText: string = '';
 
 	public constructor(title: string, created?: Date, lastSaved?: Date, savedPersistentText?: string) {
 		this.updateTitle(title);
-		this.isTitleSet = false;
 		this.created = created ?? new Date();
 		if (lastSaved) this.lastSaved = lastSaved;
 		if (savedPersistentText) this.savedPersistentText = savedPersistentText;
 	}
 
-	public static async loadFromFile(noteId: string): Promise<Note> {
-		const persistentFileName: string = `${noteId}-persistent`;
-		const entriesFileName: string = `${noteId}-entries`;
+	public static async loadFromFile(noteID: string): Promise<Note> {
+		const persistentFileName: string = `${noteID}-persistent`;
+		const entriesFileName: string = `${noteID}-entries`;
 		if (await NoteUtils.doesFileExist(persistentFileName+'.md')) {
 			const fileText: string = await NoteUtils.getMarkdownFile(persistentFileName);
 			const title = fileText.match(/title:\s*(.+)/)?.[1] ?? '';
@@ -35,6 +34,7 @@ export class Note {
 			
 			const newNote = new Note(title, created, lastSaved, textContent);
 			newNote.updateSavedPersistentTextContent(textContent);
+
 			newNote.isTitleSet = true;
 
 			if (await NoteUtils.doesFileExist(entriesFileName+'.bin')) {
@@ -65,9 +65,12 @@ export class Note {
 	}
 
 	public isUnsaved(): boolean {
-		const result = this.isPersistentTextUnsaved || this.isEntriesUnsaved;
+		const result = this.isPersistentTextUnsaved || this.isEntriesUnsaved || !this.isTitleSet;
 		return result;
-		
+	}
+
+	public hasEverBeenSaved(): boolean {
+		return this.isTitleSet;
 	}
 
 	public getPersistentTextContent(): string {
@@ -105,7 +108,7 @@ export class Note {
 		// Write to filepath for both entries and persistent
 		const persistentFileName = `${this.id}-persistent`;
 		const entriesFileName = `${this.id}-entries`;
-		
+		console.log(this.getOwnEntries());
 		const buffers: ArrayBuffer[] = this.getOwnEntries().map(e => e.toBinary());	
 		const totalLength = buffers.reduce((sum, buffer) => sum + buffer.byteLength, 0);
 

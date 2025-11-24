@@ -1,4 +1,3 @@
-import { Entry } from './entry';
 import { NoteManager } from './note-manager';
 import { NoteSelector } from './note-selector';
 import { NoteUtils } from './note-utils';
@@ -9,6 +8,9 @@ export class UIManager {
 	private entriesContainer: HTMLDivElement;
 	private logInput: HTMLTextAreaElement;
 	private persistentTextInput: HTMLTextAreaElement;
+	private overviewDateSelector: HTMLInputElement;
+	private overviewDateRangeSelector: HTMLInputElement;
+
 	private currentIndentationLevel: number = 0;
 	private draggedTab: HTMLDivElement | null = null;
 	private noteSelector: NoteSelector;
@@ -20,14 +22,17 @@ export class UIManager {
 		this.entriesContainer = document.getElementById('entry-container') as HTMLDivElement;
 		this.logInput = document.getElementById('log-input') as HTMLTextAreaElement;
 		this.persistentTextInput = document.getElementById('persistent-text-input') as HTMLTextAreaElement;
+		this.overviewDateSelector = document.getElementById('start-date-selector') as HTMLInputElement;
+		this.overviewDateRangeSelector = document.getElementById('date-range-selector') as HTMLInputElement;
 
 		this.noteTabsContainer.innerHTML = '';
 		this.entriesContainer.innerHTML = '';
 
 		this.noteManager = new NoteManager();
 		this.toastManager = new ToastManager(this.noteManager.userSettings.toastDuration);
-		this.noteSelector = new NoteSelector((noteId) => {
-			this.openNote(noteId);
+		this.noteSelector = new NoteSelector((noteID) => {
+			this.openNote(noteID);
+			this.selectNoteTab(noteID);
 		});
 
 		this.initialiseInput();
@@ -57,12 +62,15 @@ export class UIManager {
 				this.updateSaveStateDisplay(noteData.id);
 			})
 
-			const currentNote = this.noteManager.getActiveNoteID();
-			this.setCurrentNote(currentNote);
 		} catch (err) {
 			this.toastManager.show('error','Error loading notes: '+err);
 		}
 		
+		this.setupOverviewDateSelectors();
+		const currentNoteID = this.noteManager.getActivenoteID();
+		this.selectNoteTab(currentNoteID);
+		this.renderPersistentText(currentNoteID);
+		this.setCurrentNote(currentNoteID);
 	}
 
 	private initialiseInput(): void {
@@ -70,7 +78,6 @@ export class UIManager {
 		this.setupKeyboardShortcuts();
 		this.setupSidebarClickHandler();
 		this.setupTabDragging();
-		this.setupOverviewDateSelectors();
 		this.setupLogInput();
 	}
 
@@ -104,7 +111,7 @@ export class UIManager {
 	}
 
 	private setupPersistentTextHandlers(): void {
-		this.persistentTextInput.addEventListener('keyup', (_e) => {
+		this.persistentTextInput.addEventListener('input', (_e) => {
 			if (this.draggedTab) return;
 			const saveStateChanged = this.noteManager.updatePersistentText(this.persistentTextInput.value);
 			if (saveStateChanged) {
@@ -145,12 +152,12 @@ export class UIManager {
 
 		window.addEventListener('mouseup', () => {
 			if (!this.draggedTab) return;
-			
+			const newTabIndex = Array.from(this.noteTabsContainer.children).indexOf(this.draggedTab);
+			this.noteManager.reorderOpenNotes(this.draggedTab.querySelector('.tab-input').id, newTabIndex);
 			this.draggedTab.classList.remove('dragging');
 			this.draggedTab = null;
 			document.body.style.userSelect = '';
 			document.body.style.webkitUserSelect = '';
-
 		});
 
 		this.noteTabsContainer.addEventListener('mousemove', (e: MouseEvent) => {
@@ -174,37 +181,49 @@ export class UIManager {
 	}
 
 	private setupOverviewDateSelectors(): void {
-		const overviewDateSelector = document.getElementById('start-date-selector') as HTMLInputElement;
-		const overviewDates = this.noteManager.overview.getDates();
-		overviewDateSelector.min = overviewDates.earliest;
-		overviewDateSelector.max = overviewDates.latest;
-
-		overviewDateSelector.addEventListener('change', () => {
-			const newDate = new Date(overviewDateSelector.value);
-			this.noteManager.overview.updateSelectedDate(newDate);
-		});
-
-		const overviewDateRangeSelector = document.getElementById('date-range-selector') as HTMLInputElement;
-		overviewDateRangeSelector.addEventListener('change', () => {
-			const newDateRange = parseInt(overviewDateRangeSelector.value);
-			this.noteManager.overview.updateSelectedDateRange(newDateRange);
-		});
+		
+		const overviewDateLimits = this.noteManager.overview.getDates();
+		const overviewDateCurrent = this.noteManager.overview.getCurrentDateRange();
+		this.overviewDateSelector.min = overviewDateLimits.earliest;
+		this.overviewDateSelector.max = overviewDateLimits.latest;
+		this.overviewDateSelector.value = overviewDateCurrent.start;
 
 		const overviewDayPrev = document.getElementById('day-prev') as HTMLButtonElement;
 		const overviewDayNext = document.getElementById('day-next') as HTMLButtonElement;
 
-		overviewDayPrev.disabled = this.noteManager.overview.isCurrentDateEarliest();
-		overviewDayNext.disabled = this.noteManager.overview.isCurrentDateLatest();
+		this.overviewDateSelector.addEventListener('change', () => {
+			const newDate = new Date(this.overviewDateSelector.value);
+			this.noteManager.overview.updateSelectedDate(newDate);
+			this.refreshOverviewPage();
+		});
+
+		this.overviewDateRangeSelector.addEventListener('change', () => {
+			const newDateRange = parseInt(this.overviewDateRangeSelector.value);
+			this.noteManager.overview.updateSelectedDateRange(newDateRange);
+			this.refreshOverviewPage();
+		});
 
 		overviewDayPrev.addEventListener('click', () => {
-			this.noteManager.overview.stepBackward();
-			overviewDayPrev.disabled = this.noteManager.overview.isCurrentDateEarliest();
+			const newDate = this.noteManager.overview.stepBackward();
+			this.overviewDateSelector.value = newDate;
+			this.refreshOverviewPage();
 		});
 
-		overviewDayNext.addEventListener('click', () => { 
-			this.noteManager.overview.stepForward(); 
-			overviewDayNext.disabled = this.noteManager.overview.isCurrentDateLatest();
+		overviewDayNext.addEventListener('click', () => {
+			const newDate = this.noteManager.overview.stepForward();
+			this.overviewDateSelector.value = newDate;
+			this.refreshOverviewPage();
 		});
+	}
+
+	private refreshOverviewPage(): void {
+		this.noteManager.updateOverview();
+		const overviewDayPrev = document.getElementById('day-prev') as HTMLButtonElement;
+		const overviewDayNext = document.getElementById('day-next') as HTMLButtonElement;
+		overviewDayPrev.disabled = this.noteManager.overview.isCurrentDateRangeEarliest();
+		overviewDayNext.disabled = this.noteManager.overview.isCurrentDateRangeLatest();
+		this.logInput.disabled = !overviewDayNext.disabled;
+		this.displayCurrentEntries();
 	}
 
 	private setupLogInput(): void {
@@ -259,8 +278,10 @@ export class UIManager {
 	}
 
 	private submitEntry(): void {
-		this.noteManager.submitEntry(this.logInput.value, new Date());
+		const _newEntry = this.noteManager.submitEntry(this.logInput.value, new Date());
+		this.logInput.value = '';
 		this.displayCurrentEntries();
+		this.updateSaveStateDisplay();
 	}
 
 
@@ -287,8 +308,9 @@ export class UIManager {
 	}
 
 	private addNewNote(): void {
-		const newNoteID = this.noteManager.createNewNote();
-		this.openNote(newNoteID);
+		const newnoteID = this.noteManager.createNewNote();
+		this.openNote(newnoteID);
+		this.selectNoteTab(newnoteID);
 	}
 
 	private openNote(noteID: string): void {
@@ -307,14 +329,12 @@ export class UIManager {
 
 	private closeNote(noteID: string): void {
 		try {
-			const newNoteID = this.noteManager.closeCurrentNote();
+			const newnoteID = this.noteManager.closeCurrentNote();
 
-			const radioElement = document.getElementById(noteID) as HTMLInputElement;
-			const noteTabDiv = radioElement.parentElement as HTMLDivElement;
-			noteTabDiv.remove();
+			this.removeNoteTab(noteID);
 
-			this.selectNoteTab(newNoteID);
-			this.setCurrentNote(newNoteID);
+			this.selectNoteTab(newnoteID);
+			this.setCurrentNote(newnoteID);
 		} catch (err) {
 			this.toastManager.show('error','Error closing note: '+err);
 		}
@@ -322,8 +342,8 @@ export class UIManager {
 
 	private closeCurrentNote(): void {
 		try {
-			const activeNoteID = this.noteManager.getActiveNoteID();
-			this.closeNote(activeNoteID);
+			const activenoteID = this.noteManager.getActivenoteID();
+			this.closeNote(activenoteID);
 		} catch (err) {
 			this.toastManager.show('error','Error closing note: '+err);
 		}
@@ -331,10 +351,10 @@ export class UIManager {
 
 	private async saveCurrentNote(): Promise<void> {
 		try {
-			this.noteManager.updatePersistentText(this.persistentTextInput.value);
+			const currentnoteID = this.noteManager.getActivenoteID();
+			if (currentnoteID != '.overview') this.noteManager.updatePersistentText(this.persistentTextInput.value);
 
-			const currentNoteID = this.noteManager.getActiveNoteID();
-			const result = await this.noteManager.saveNote(currentNoteID);
+			const result = await this.noteManager.saveNote(currentnoteID);
 
 			if (result) {
 				if (result.success) {
@@ -345,7 +365,7 @@ export class UIManager {
 					}
 					await this.noteManager.saveMetadata();
 					this.updateNoteLabelDisplay(result.newID, result.newTitle, false); // ALSO CHECK IF BAD
-					this.updateTitleDisplay(result.newID, result.newTitle, false);
+					this.updateTitleDisplay(result.newTitle, false);
 				} else {
 					this.toastManager.show('error','Unknown error saving current note!');
 				}
@@ -405,10 +425,12 @@ export class UIManager {
 		if (noteID == '.overview') {
 			overviewControls.classList.add('show');
 			this.persistentTextInput.readOnly = true;
-			this.noteManager.updateOverview();
+			this.refreshOverviewPage();
+			
 		} else {
 			overviewControls.classList.remove('show');
 			this.persistentTextInput.readOnly = false;
+			this.logInput.disabled = false;
 		}
 
 		this.renderPersistentText(noteID);
@@ -427,94 +449,105 @@ export class UIManager {
 		this.updateSaveStateDisplay();
 	}
 
-	private displayNewEntry(newEntry: Entry): void {
-		// const entries = this.noteManager.getCurrentEntries();
+	// private displayNewEntry(newEntry: Entry): void {
+	// 	if (!newEntry) return;
 
-		if (!newEntry) return;
+	// 	let lastGroupDiv: HTMLDivElement | null = null;
+	// 	const existingGroups = Array.from(this.entriesContainer.querySelectorAll('.entry-content'));
+	// 	if (existingGroups.length > 0) {
+	// 		const lastGroup = existingGroups[existingGroups.length - 1] as HTMLDivElement;
+	// 		const lastGroupID = parseInt(lastGroup.dataset.groupID || '0');
+	// 		if (lastGroupID == newEntry.groupId) {
+	// 			lastGroupDiv = lastGroup as HTMLDivElement;
+	// 		}
+	// 	}
 
-		let lastGroupDiv: HTMLDivElement | null = null;
-		const existingGroups = Array.from(this.entriesContainer.querySelectorAll('.entry-content'));
-		if (existingGroups.length > 0) {
-			const lastGroup = existingGroups[existingGroups.length - 1] as HTMLDivElement;
-			const lastGroupID = parseInt(lastGroup.dataset.groupID || '0');
-			if (lastGroupID == newEntry.groupId) {
-				lastGroupDiv = lastGroup as HTMLDivElement;
-			}
-		}
+	// 	let entryDiv: HTMLElement;
+	// 	if (lastGroupDiv) {
+	// 		entryDiv = lastGroupDiv;
+	// 	} else {
+	// 		entryDiv = document.createElement('div');
+	// 		entryDiv.classList.add('entry-content');
 
-		let entryDiv: HTMLElement;
-		if (lastGroupDiv) {
-			entryDiv = lastGroupDiv;
-		} else {
-			entryDiv = document.createElement('div');
-			entryDiv.classList.add('entry-content');
+	// 		const entryHeader = document.createElement('div');
+	// 		entryHeader.classList.add('entry-header');
 
-			const entryHeader = document.createElement('div');
-			entryHeader.classList.add('entry-header');
+	// 		const headingBreak = document.createElement('hr');
+	// 		entryHeader.appendChild(headingBreak);
 
-			const headingBreak = document.createElement('hr');
-			entryHeader.appendChild(headingBreak);
+	// 		const timestampSpan = document.createElement('span');
+	// 		timestampSpan.textContent = NoteUtils.formatDateTime(newEntry.created);
+	// 		entryHeader.appendChild(timestampSpan);
 
-			const timestampSpan = document.createElement('span');
-			timestampSpan.textContent = NoteUtils.formatDate(newEntry.created);
-			entryHeader.appendChild(timestampSpan);
+	// 		entryDiv.appendChild(entryHeader);
 
-			entryDiv.appendChild(entryHeader);
-			this.entriesContainer.appendChild(entryDiv);
-		}
+	// 		if (this.entriesContainer.childElementCount > 0) {
+	// 			this.entriesContainer.insertBefore(entryDiv,this.entriesContainer.firstElementChild);
+	// 		} else {
+	// 			this.entriesContainer.appendChild(entryDiv);
+	// 		}
+	// 	}
 
-		const splitLines = newEntry.text.split('\n');
-		let parents: HTMLDivElement[] = [];
+	// 	const splitLines = newEntry.text.split('\n');
+	// 	let parents: HTMLDivElement[] = [];
 
-		for (let i = 0; i < splitLines.length; i++) {
-			const line = splitLines[i];
-			const indentLevel = NoteUtils.countLeadingTabs(line, this.noteManager.userSettings.indentString);
-			const text = NoteUtils.stripLeadingTabs(line, this.noteManager.userSettings.indentString);
+	// 	for (let i = 0; i < splitLines.length; i++) {
+	// 		const line = splitLines[i];
+	// 		const indentLevel = NoteUtils.countLeadingTabs(line, this.noteManager.userSettings.indentString);
+	// 		const text = NoteUtils.stripLeadingTabs(line, this.noteManager.userSettings.indentString);
 
-			const entryTextDiv = document.createElement('div');
-			entryTextDiv.classList.add('entry-text');
+	// 		const entryTextDiv = document.createElement('div');
+	// 		entryTextDiv.classList.add('entry-text');
 
-			let hasChildren = false;
-			if (i < splitLines.length - 1) {
-				const nextIndent = NoteUtils.countLeadingTabs(splitLines[i + 1], this.noteManager.userSettings.indentString);
-				hasChildren = nextIndent > indentLevel;
-			}
+	// 		let hasChildren = false;
+	// 		if (i < splitLines.length - 1) {
+	// 			const nextIndent = NoteUtils.countLeadingTabs(splitLines[i + 1], this.noteManager.userSettings.indentString);
+	// 			hasChildren = nextIndent > indentLevel;
+	// 		}
 
-			if (hasChildren) {
-				const disclosureWidget = document.createElement('span');
-				disclosureWidget.classList.add('disclosure-widget');
-				entryTextDiv.appendChild(disclosureWidget);
-			}
+	// 		if (hasChildren) {
+	// 			const disclosureWidget = document.createElement('span');
+	// 			disclosureWidget.classList.add('disclosure-widget');
+	// 			entryTextDiv.appendChild(disclosureWidget);
+	// 		}
 
-			const entryTextSpan = document.createElement('span');
-			entryTextSpan.textContent = text;
-			entryTextDiv.appendChild(entryTextSpan);
+	// 		const entryTextSpan = document.createElement('span');
+	// 		entryTextSpan.textContent = text;
+	// 		entryTextDiv.appendChild(entryTextSpan);
 
-			let parentContainer = entryDiv;
-			for (let j = 0; j < indentLevel; j++) {
-				if (!parents[j]) {
-					const emptyDiv = document.createElement('div');
-					emptyDiv.classList.add('entry-text');
-					parentContainer.appendChild(emptyDiv);
-					parents[j] = emptyDiv;
-				}
-				parentContainer = parents[j];
-			}
+	// 		let parentContainer = entryDiv;
+	// 		for (let j = 0; j < indentLevel; j++) {
+	// 			if (!parents[j]) {
+	// 				const emptyDiv = document.createElement('div');
+	// 				emptyDiv.classList.add('entry-text');
+	// 				parentContainer.appendChild(emptyDiv);
+	// 				parents[j] = emptyDiv;
+	// 			}
+	// 			parentContainer = parents[j];
+	// 		}
 
-			parentContainer.appendChild(entryTextDiv);
-			parents = parents.slice(0, indentLevel);
-			parents[indentLevel] = entryTextDiv;
-		}
+	// 		parentContainer.appendChild(entryTextDiv);
+	// 		parents = parents.slice(0, indentLevel);
+	// 		parents[indentLevel] = entryTextDiv;
+	// 	}
+	// }
 
-		// Scroll to bottom or focus if needed
-		entryDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
-	}
+	// private displayCurrentEntries(): void {
+	// 	const entries = this.noteManager.getCurrentEntries();
+	// 	this.entriesContainer.innerHTML = '';
+		
+	// 	if (entries.length == 0) return;
+
+	// 	for (const entry of entries) {
+	// 		this.displayNewEntry(entry);
+	// 	}
+	// }
 
 	private displayCurrentEntries(): void {
-		const entries = this.noteManager.getCurrentEntries();	
-		if (entries.length == 0) return;
+		const entries = this.noteManager.getCurrentEntries();
 		this.entriesContainer.innerHTML = '';
 		
+		if (entries.length == 0) return;
 		for (let i = 0; i < entries.length; i++) {
 			const groupStartEntry = entries[i];
 			const currentGroupId = groupStartEntry.groupId;
@@ -538,7 +571,7 @@ export class UIManager {
 
 			const timestampSpan = document.createElement('span');
 			// TODO: Go through the entire group and get the most recently edited date, and use that
-			timestampSpan.textContent = NoteUtils.formatDate(entries[i].created); // TODO: Relative/contextual/fuzzy time
+			timestampSpan.textContent = NoteUtils.formatDateTime(entries[i].created); // TODO: Relative/contextual/fuzzy time
 			entryHeader.appendChild(timestampSpan);
 
 			entryDiv.appendChild(entryHeader);
@@ -586,7 +619,12 @@ export class UIManager {
 				parents[indentLevel] = entryTextDiv;
 			}
 
-			this.entriesContainer.appendChild(entryDiv);
+			if (this.entriesContainer.childElementCount > 0) {
+				this.entriesContainer.insertBefore(entryDiv,this.entriesContainer.firstElementChild);
+			} else {
+				this.entriesContainer.appendChild(entryDiv);
+			}
+			
 
 			i = nextIndex;
 		}
@@ -601,7 +639,7 @@ export class UIManager {
 		const noteData = this.noteManager.getNoteData(noteID);
 		if (!noteData) return; //TODO
 
-		if (noteID == this.noteManager.getActiveNoteID()) this.updateTitleDisplay(noteData.id, noteData.title, noteData.isUnsaved);
+		if (noteData.id == this.noteManager.getActivenoteID()) this.updateTitleDisplay(noteData.title, noteData.isUnsaved);
 		this.updateNoteLabelDisplay(noteData.id, noteData.title, noteData.isUnsaved);
 	}
 
@@ -611,7 +649,7 @@ export class UIManager {
 		if (noteTitle.length > this.noteManager.userSettings.maxTabTitleLength) noteLabelElement.textContent += '...';
 	}
 
-	private updateTitleDisplay(noteID: string, noteTitle: string, isUnsaved: boolean): void {
+	private updateTitleDisplay(noteTitle: string, isUnsaved: boolean): void {
 		const noteTitleElement = document.getElementById('note-title') as HTMLInputElement;
 		noteTitleElement.value = (isUnsaved ? '* ' : '') + noteTitle;
 	}

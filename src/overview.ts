@@ -4,22 +4,22 @@ import { NoteUtils } from './note-utils';
 
 export class Overview extends Note {
 	public overviewEntries: Entry[] = [];
-	private earliestDate: string;
-	private currentDate: string;
-	private selectedDateRange: DateRange;
+	private validDates: DateRange;
+	private selectedDates: DateRange;
 	private aggregatedEntries: EntriesByDay;
-	private selectedNoteId?: string;
+	private selectednoteID?: string;
 
 	public constructor() {
 		super('Overview'); // Creates a note with the hard-set title "overview"
 		this.id = '.'+this.id; // force a . in front of title for file reasons
-		this.currentDate = DateRange.convertFromDate(new Date());
-		this.selectedDateRange = new DateRange(new Date())
+		this.selectedDates = new DateRange(new Date());
+		this.validDates = new DateRange(new Date());
 		this.isPersistentTextUnsaved = false;
 		this.isTitleSet = true;
 	}
 
 	public static async loadFromFile(): Promise<Overview> {
+		console.log('...are we eveb loading');
 		const entriesFileName: string = '.overview-entries';
 		
 		const newOverview = new Overview();
@@ -36,7 +36,7 @@ export class Overview extends Note {
 				newOverview.addEntry(newEntry)
 				i += 25 + textLength;
 			}
-
+			console.log(newOverview.entries);
 			return newOverview;
 		} else {
 			console.error(`Could not find entries file ${entriesFileName}!`);
@@ -54,7 +54,7 @@ export class Overview extends Note {
 
 		for (const entryWrapper of sortedEntries) {
 			const currentEntry = entryWrapper.entry;
-			const day = DateRange.convertFromDate(entryWrapper.entry.created);
+			const day = NoteUtils.formatDate(entryWrapper.entry.created);
 			if (!aggregatedEntries[day]) aggregatedEntries[day] = [];
 
 			let isNewGroup = false;
@@ -64,7 +64,7 @@ export class Overview extends Note {
 			} else {
 				const previousEntry = previousEntryWrapper.entry;
 				
-				if (entryWrapper.sourceNoteId != previousEntryWrapper.sourceNoteId || currentEntry.groupId != previousEntry.groupId) {
+				if (entryWrapper.sourcenoteID != previousEntryWrapper.sourcenoteID || currentEntry.groupId != previousEntry.groupId) {
 					isNewGroup = true;
 				}
 			}
@@ -81,8 +81,11 @@ export class Overview extends Note {
 
 	public addEntry(newEntry: Entry): void {
 		this.overviewEntries.push(newEntry);
-		this.updateEntriesShown();
 		this.isEntriesUnsaved = true;
+	}
+
+	public isUnsaved(): boolean {
+		return this.isEntriesUnsaved;
 	}
 
 	public clearEntries(): void {
@@ -90,20 +93,21 @@ export class Overview extends Note {
 	}
 
 	public updateEntries(allEntries: EntryWithSource[]): void { // Collects all entries and parses them
+		console.log('running updateEntries()');
 		this.overviewEntries.forEach(entry => {
-			const newEntryWrapper: EntryWithSource = { entry: entry, sourceNoteId: this.id };
+			const newEntryWrapper: EntryWithSource = { entry: entry, sourcenoteID: this.id };
 			allEntries.push(newEntryWrapper); // Adds its own entries to the collated entry thing
 		});
 		this.aggregatedEntries = Overview.collateEntries(allEntries);
-		this.earliestDate = Object.keys(this.aggregatedEntries).sort()[0] || this.currentDate;
+		const earliestDate = Object.keys(this.aggregatedEntries).sort()[0] || this.validDates.getEarlierDate();
+		this.validDates.setStart(earliestDate);
 		this.updateEntriesShown();
 	}
 
 	private updateEntriesShown(): void { // Actually figures out what to display
 		this.clearEntries();
-		const startKey: string = this.selectedDateRange.start;
-		const endKey:string = this.selectedDateRange.end ?? startKey;
-
+		const startKey: string = this.selectedDates.getEarlierDate();
+		const endKey: string = this.selectedDates.getLaterDate();
 		for (const day in this.aggregatedEntries) {
 			if (day >= startKey && day <= endKey) {
 				this.entries.push(...this.aggregatedEntries[day]);
@@ -113,8 +117,9 @@ export class Overview extends Note {
 
 	public updateSelectedDate(newDateStart: Date): boolean {
 		const newDateRange: DateRange = new DateRange(newDateStart);
-		if (newDateRange.start >= this.earliestDate && newDateRange.start <= this.currentDate) {
-			this.selectedDateRange = newDateRange;
+		if (newDateRange.start >= this.validDates.start && newDateRange.start <= this.validDates.end) {
+			this.selectedDates = newDateRange;
+			this.updateEntriesShown();
 			return true;
 		} else {
 			return false;
@@ -123,23 +128,28 @@ export class Overview extends Note {
 
 	public updateSelectedDateRange(newDateRange: number): boolean {
 		if (newDateRange == 0) return false;
-		this.selectedDateRange.end = DateRange.convertFromDate(DateRange.addDaysToDates(this.selectedDateRange.start, newDateRange));
+		this.selectedDates.setRange(newDateRange);
+		this.updateEntriesShown();
 	}
 
-	public stepForward(): void { // Returns a value true/false if the corresponding button should be greyed out
-		this.selectedDateRange.stepDateRange(this.selectedDateRange.range);
+	public stepForward(): string { // Returns a value true/false if the corresponding button should be greyed out
+		this.selectedDates.increment(this.validDates.getLaterDate());
+		this.updateEntriesShown();
+		return this.selectedDates.start;
 	}
 
-	public stepBackward(): void {
-		this.selectedDateRange.stepDateRange(-this.selectedDateRange.range);
+	public stepBackward(): string {
+		this.selectedDates.decrement(this.validDates.getEarlierDate());
+		this.updateEntriesShown();
+		return this.selectedDates.start;
 	}
 
-	public isCurrentDateLatest(): boolean {
-		return (this.selectedDateRange.end || this.selectedDateRange.start) >= this.currentDate;
+	public isCurrentDateRangeLatest(): boolean {
+		return this.selectedDates.getLaterDate() >= this.validDates.end;
 	}
 
-	public isCurrentDateEarliest(): boolean {
-		return this.selectedDateRange.start <= this.earliestDate;
+	public isCurrentDateRangeEarliest(): boolean {
+		return this.selectedDates.getEarlierDate() <= this.validDates.start;
 	}
 
 	public getOwnEntries(): Entry[] {
@@ -147,45 +157,63 @@ export class Overview extends Note {
 	}
 
 	public getDates(): { earliest: string, latest: string } {
-		return { earliest: this.earliestDate, latest: this.currentDate };
+		return { earliest: this.validDates.start, latest: this.validDates.end };
+	}
+
+	public getCurrentDateRange(): { start: string, end?: string, range: number } {
+		return this.selectedDates;
 	}
 }
 
 class DateRange {
 	public start: string;
-	public end?: string;
+	public end: string;
 	public range: number = 1;
 
-	public constructor(start: Date, end?: Date) {
-		this.start = DateRange.convertFromDate(start)
-		if (end) {
-			this.end = DateRange.convertFromDate(end);
-			this.range = DateRange.daysBetweenDates(start, end);
-		}
-	}
-
-	public static addDaysToDates(date: string, days: number): Date {
-		const result = new Date(
-			parseInt(date.slice(0, 4)),
-			parseInt(date.slice(4, 6)) - 1,
-			parseInt(date.slice(6, 8)),
-		);
-		result.setDate(result.getDate() + days);
-
-		return result;
+	public constructor(start: Date, range?: number) {
+		this.start = NoteUtils.formatDate(start);
+		if (range) this.range = range;
+		this.updateEnd();
 	}
 
 	public static daysBetweenDates(start: Date, end: Date): number {
-    	return Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+		return Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 	}
 
-	public static convertFromDate(date: Date): string {
-		return (date.toISOString().slice(0, 10).replace(/-/g, ''));
+	private updateEnd(): void {
+		this.end = NoteUtils.addDaysToDateString(this.start, this.range - 1);
 	}
 
-	public stepDateRange(days: number): void {
-		this.start = DateRange.convertFromDate(DateRange.addDaysToDates(this.start, days));
-		if (this.end) this.end = DateRange.convertFromDate(DateRange.addDaysToDates(this.end, days));
+	public increment(maxValue: string): void {
+		this.start = NoteUtils.addDaysToDateString(this.start, Math.abs(this.range));
+		this.start = this.start < maxValue ? this.start : maxValue; // Returns whichever date is earlier, capping it
+		this.updateEnd();
+	}
+
+	public decrement(minValue: string): void {
+		this.start = NoteUtils.addDaysToDateString(this.start, -1 * Math.abs(this.range));
+		this.start = this.start > minValue ? this.start : minValue; // Returns whichever date is later
+		this.updateEnd();
+	}
+
+	public setRange(newRange: number): void {
+		if (newRange == 0) return;
+		
+		this.range = newRange;
+		this.updateEnd();
+	}
+
+	public setStart(newStart: string): void {
+		this.start = newStart;
+		this.range = DateRange.daysBetweenDates(new Date(this.start), new Date(newStart));
+	}
+
+	public getEarlierDate(): string {
+		return this.start < this.end ? this.start : this.end;
+	}
+
+	public getLaterDate(): string {
+		return this.start > this.end ? this.start : this.end;
 	}
 }
 
@@ -195,5 +223,5 @@ interface EntriesByDay {
 
 export interface EntryWithSource {
 	entry: Entry;
-	sourceNoteId: string;
+	sourcenoteID: string;
 }

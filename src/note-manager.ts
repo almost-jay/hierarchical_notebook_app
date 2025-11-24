@@ -8,9 +8,9 @@ const CONFIG_FILENAME = 'config';
 export class NoteManager {
 	public notes: Map<string, Note>;
 	public overview: Overview;
-	private activeNoteId: string = '.overview';
-	private openNotes: Set<string>; //openNotes ∩ unopenedNotes = ∅ 
-	private unopenedNotes: Set<string>; 
+	private activenoteID: string = '.overview';
+	private openNotes: string[]; //openNotes ∩ unopenedNotes = ∅ 
+	private unopenedNotes: string[]; 
 	private cachedData: SessionData;
 	public userSettings: UserSettings = {
 		indentString: '\t',
@@ -20,20 +20,20 @@ export class NoteManager {
 		toastDuration: 3000, // ms
 		dragHandleWidth: 20, // px
 		maxTabTitleLength: 30, // chars
-		restoreTextPreviewLength: 50, // chars
+		restoreTextPreviewLength: 500, // chars
 	};
 
 	public constructor() {
 		this.notes =  new Map();
 		this.overview = new Overview();
 		this.notes.set('.overview', this.overview);
-		this.openNotes = new Set();
-		this.unopenedNotes = new Set();
+		this.openNotes = [];
+		this.unopenedNotes = [];
 		
 		this.cachedData = {
-			currentNoteId: this.notes.get(this.activeNoteId) ? this.activeNoteId : '.overview',
-			unsavedEntries: {},
-			unsavedPersistentText: {},
+			currentnoteID: this.notes.get(this.activenoteID) ? this.activenoteID : '.overview',
+			//unsavedEntries: {},
+			//unsavedPersistentText: {},
 			openNotes: [],
 		};
 	}
@@ -51,6 +51,7 @@ export class NoteManager {
 				if (noteID == '') continue;
 				
 				if (noteID == '.overview') {
+					console.log('flag??');
 					const newOverview: Overview = await Overview.loadFromFile();
 					this.overview = newOverview;
 					this.notes.set('.overview', this.overview);
@@ -83,35 +84,87 @@ export class NoteManager {
 
 		const cacheText = await NoteUtils.readCache(this.userSettings.cacheFileName);
 		const cacheParsed = JSON.parse(cacheText) as Partial<SessionData>;
-
+		
 		const results: { id: string, title: string }[] = [];
 		this.cachedData = { ...this.cachedData, ...cacheParsed };
 
-		for (const noteID in this.cachedData.unsavedPersistentText) {
-			const unsavedText = this.cachedData.unsavedPersistentText[noteID];
-			if (!(!unsavedText || unsavedText == this.notes.get(noteID).getPersistentTextContent())) {
-				const result = await confirm(`Restore unsaved text: ...${unsavedText.slice(unsavedText.length - this.userSettings.restoreTextPreviewLength)} for ${noteID}?`);
-				if (result) { // TODO: Add setting to autorestore
-					
-					this.notes.get(noteID).updatePersistentTextContent(unsavedText); // FIXME
-				} else {
-					this.cachedData.unsavedPersistentText[noteID] = '';
-				}
-			} else {
-				this.notes.get(noteID).updateSavedPersistentTextContent(this.notes.get(noteID).getPersistentTextContent()); // ???
-			}
-		}
+		// for (const noteID in this.cachedData.unsavedEntries) {
+		// 	if (this.isnoteIDValid(noteID)) {
+		// 		const note = this.notes.get(noteID);
+		// 		const unsavedEntries = this.cachedData.unsavedEntries[noteID];
+		// 		if (unsavedEntries) {
+		// 			const result = await this.confirmRestoreCachedEntries(noteID, unsavedEntries);
+		// 			if (result) { // TODO: Add setting to autorestore
+		// 				for (const entry of unsavedEntries) {
+		// 					note.addEntry(entry);
+		// 				}
+						
+		// 			} else {
+		// 				delete this.cachedData.unsavedEntries[noteID];
+		// 			}
+		// 		}
+		// 	} else {
+		// 		delete this.cachedData.unsavedEntries[noteID];
+		// 	}
+		// }
+		
+		// for (const noteID in this.cachedData.unsavedPersistentText) {
+		// 	if (this.isnoteIDValid(noteID)) {
+		// 		const unsavedText = this.cachedData.unsavedPersistentText[noteID];
+		// 		if (!(!unsavedText || unsavedText == this.notes.get(noteID).getPersistentTextContent())) { // Possibly an unnecessary check?
+		// 			const result = await confirm(`Restore unsaved text: "...${unsavedText.slice(unsavedText.length - Math.min(unsavedText.length, this.userSettings.restoreTextPreviewLength))}" for ${noteID}?`);
+		// 			if (result) { // TODO: Add setting to autorestore
+						
+		// 				this.notes.get(noteID).updatePersistentTextContent(unsavedText); // FIXME
+		// 			} else {
+		// 				delete this.cachedData.unsavedPersistentText[noteID];
+		// 			}
+		// 		}
+		// 	} else {
+		// 		delete this.cachedData.unsavedPersistentText[noteID];
+		// 	}
+		// }
 
 		for (const noteID of this.cachedData.openNotes) {
-			const result = this.openNoteData(noteID);
-			if (result == null) {
-				throw new Error(`Could not open: ${noteID}`);
-			} else {
-				results.push(result);
+			if (this.isnoteIDValid(noteID)) {
+				const result = this.openNoteData(noteID);
+				if (result == null) {
+					throw new Error(`Could not open: ${noteID}`);
+				} else {
+					results.push(result);
+				}
 			}
 		}
 
+		this.activenoteID = this.notes.has(this.cachedData.currentnoteID) ? this.cachedData.currentnoteID : '.overview';
+		await this.writeToCache();
 		return results;
+	}
+
+	private confirmRestoreCachedEntries(noteID: string, entries: Entry[]): boolean {
+		if (entries.length < 1) return;
+		switch (entries.length) {
+		case 1:	{
+			let entryText = entries[0].text;
+			if (entryText.length > this.userSettings.restoreTextPreviewLength) {
+				entryText = entryText.slice(0, this.userSettings.restoreTextPreviewLength);
+			}
+			return confirm(`Restore unsaved entry: ${entryText}... for ${noteID}?`); }
+		case 2: {
+			let entryTextFirst = entries[0].text;
+			if (entryTextFirst.length > this.userSettings.restoreTextPreviewLength / 2) {
+				entryTextFirst = entryTextFirst.slice(0, Math.floor(this.userSettings.restoreTextPreviewLength / 2));
+				entryTextFirst += '...';
+			}
+			let entryTextSecond = entries[1].text;
+			if (entryTextSecond.length > this.userSettings.restoreTextPreviewLength / 2) {
+				entryTextSecond = entryTextSecond.slice(0, Math.floor(this.userSettings.restoreTextPreviewLength / 2));
+				entryTextSecond += '...';
+			}
+			return confirm(`Restore 2 unsaved entries: ${entryTextFirst}, and ${entryTextSecond} for ${noteID}?`); }
+		default:
+			return confirm(`Restore ${entries.length} entries for ${noteID}?`);
+		}
 	}
 
 	public async loadUserSettings(): Promise<void> {
@@ -123,16 +176,17 @@ export class NoteManager {
 		}
 	}
 
-	public createNewNote(noteTitle?: string): string {
+	public createNewNote(noteTitle?: string): string { // Used to actually create a note
 		noteTitle = noteTitle || `Untitled ${this.notes.size}`;
 		const newNote = new Note(noteTitle);
 		this.addNewNote(newNote);
+		this.writeToCache();
 		return newNote.id;
 	}
 
-	private addNewNote(newNote: Note): void {
+	private addNewNote(newNote: Note): void { // Used to add a note's data to its list
 		this.notes.set(newNote.id, newNote);
-		this.unopenedNotes.add(newNote.id);
+		this.unopenedNotes.push(newNote.id);
 	}
 
 	/** 
@@ -150,14 +204,10 @@ export class NoteManager {
 	 * @returns a string/null containing the ID of the current note
 	 */
 	public changeCurrentNote(noteID: string): string | null {
-		// Same logic as setCurrentNote minus the dom shit
-		// logic inside the tab click handlers?
-		// Fires onActiveNoteChanged(noteID)
-
 		if (!this.notes.has(noteID)) return null;
 
-		this.activeNoteId = noteID;
-		this.cachedData.currentNoteId = noteID;
+		this.activenoteID = noteID;
+		this.cachedData.currentnoteID = noteID;
 
 		return noteID;
 	}
@@ -166,7 +216,7 @@ export class NoteManager {
 		const allEntries = [];
 		this.overview.clearEntries();
 		for (const note of this.notes.values()) {
-			allEntries.push(...note.entries.map(entry => ({ entry: entry, sourceNoteId: note.id })));  // Deliberately using .entries instead of getOwnEntries here
+			allEntries.push(...note.entries.map(entry => ({ entry: entry, sourcenoteID: note.id })));  // Deliberately using .entries instead of getOwnEntries here
 		}
 		this.overview.updateEntries(allEntries);
 	}
@@ -180,10 +230,10 @@ export class NoteManager {
 		// Move ID from unopened to openNotes
 		// Update internal metadata
 
-		if (!this.unopenedNotes.has(noteID)) throw new Error(`Could not find note with id ${noteID} to open it`);
+		if (!this.unopenedNotes.includes(noteID)) throw new Error(`Could not find note with id ${noteID} to open it`);
 
-		this.unopenedNotes.delete(noteID);
-		this.openNotes.add(noteID);
+		this.unopenedNotes.splice(this.unopenedNotes.indexOf(noteID), 1);
+		this.openNotes.push(noteID);
 
 		const note = this.notes.get(noteID);
 		if (!note) return null;
@@ -198,16 +248,16 @@ export class NoteManager {
 		// Remove note from openNotes and select fallback active note
 		// Basically the same but without the DOM shit
 
-		if (!this.openNotes.has(this.activeNoteId)) throw new Error(`Could not find note with id ${this.activeNoteId} to close it`);
+		if (!this.openNotes.includes(this.activenoteID)) throw new Error(`Could not find note with id ${this.activenoteID} to close it`);
 
-		this.openNotes.delete(this.activeNoteId);
-		this.unopenedNotes.add(this.activeNoteId);
+		this.openNotes.splice(this.openNotes.indexOf(this.activenoteID), 1);
+		this.unopenedNotes.push(this.activenoteID);
 
 		const openNotesAsArray = Array.from(this.openNotes);
-		const newNoteId = openNotesAsArray[openNotesAsArray.length - 1] || '.overview';
-		this.changeCurrentNote(newNoteId);
+		const newnoteID = openNotesAsArray[openNotesAsArray.length - 1] || '.overview';
+		this.changeCurrentNote(newnoteID);
 
-		return newNoteId;
+		return newnoteID;
 	}
 
 	/**
@@ -239,25 +289,28 @@ export class NoteManager {
 		const result = await note.save();
 		const newID = note.id;
 
-		if (oldID != newID) { // Possible duplicate logic for this.updateNoteTitle?
+		if (oldID != newID) {
 			this.notes.delete(oldID);
 			this.notes.set(newID, note);
 
-			if (this.openNotes.has(oldID)) {
-				this.openNotes.delete(oldID);
-				this.openNotes.add(newID);
+			if (this.openNotes.includes(oldID)) {
+				this.openNotes.splice(this.openNotes.indexOf(oldID), 1);
+				this.openNotes.push(newID);
 			}
-			if (this.unopenedNotes.has(oldID)) {
-				this.unopenedNotes.delete(oldID);
-				this.unopenedNotes.add(newID);
+			if (this.unopenedNotes.includes(oldID)) {
+				this.unopenedNotes.splice(this.unopenedNotes.indexOf(oldID), 1);
+				this.unopenedNotes.push(newID);
 			}
 		}
+
+		//if (this.cachedData.unsavedEntries[newID]) delete this.cachedData.unsavedEntries[newID];
+		//if (this.cachedData.unsavedPersistentText[newID]) delete this.cachedData.unsavedPersistentText[newID];
 
 		return { success: result, oldID, newID, newTitle: note.title };
 	}
 
 	public async saveMetadata(): Promise<void> {
-		const noteHeadings = Array.from(this.openNotes).join('\n') + '\n' + Array.from(this.unopenedNotes).join('\n');
+		const noteHeadings = Array.from(this.openNotes).join('\n') + '\n' + Array.from(this.unopenedNotes).join('\n') + '.overview';
 		await NoteUtils.writeMarkdownFile(this.userSettings.noteIndexFileName,noteHeadings);
 		await this.writeToCache();
 	}
@@ -280,13 +333,13 @@ export class NoteManager {
 		this.notes.delete(oldID);
 		this.notes.set(newID, note);
 
-		if (this.openNotes.has(oldID)) {
-			this.openNotes.delete(oldID);
-			this.openNotes.add(newID);
+		if (this.openNotes.includes(oldID)) {
+			this.openNotes.splice(this.openNotes.indexOf(oldID), 1);
+			this.openNotes.push(newID);
 		}
-		if (this.unopenedNotes.has(oldID)) {
-			this.unopenedNotes.delete(oldID);
-			this.unopenedNotes.add(newID);
+		if (this.unopenedNotes.includes(oldID)) {
+			this.unopenedNotes.splice(this.unopenedNotes.indexOf(oldID), 1);
+			this.unopenedNotes.push(newID);
 		}
 
 		return { oldID, newID, newTitle };
@@ -302,40 +355,39 @@ export class NoteManager {
 		// Update note.persistentText
 		// Trigger cache update callback
 		// Notify UI that note's unsaved state changed
-		noteID = noteID || this.activeNoteId;
+		noteID = noteID || this.activenoteID;
 		const note = this.notes.get(noteID);
 		if (!note) return false;
 		
 		const wasUnsaved = note.isUnsaved();
-
 		note.updatePersistentTextContent(newText);
-		
+
 		const isUnsavedNow = note.isUnsaved();
 
-		if (note.isUnsaved()) {
-			this.cachedData.unsavedPersistentText[noteID] = newText;
-			this.writeToCache();
-		} else if (noteID in this.cachedData.unsavedPersistentText) {
-			delete this.cachedData.unsavedPersistentText[noteID];
-			this.writeToCache();
-		}
+		// if (note.isUnsaved()) {
+		// 	this.cachedData.unsavedPersistentText[noteID] = newText;
+		// } else if (noteID in this.cachedData.unsavedPersistentText) {
+		// 	delete this.cachedData.unsavedPersistentText[noteID];
+		// }
 
+		// this.writeToCache();
+		
 		return wasUnsaved != isUnsavedNow;
 	}
 
-	public getActiveNoteID(): string {
-		return this.activeNoteId;
+	public getActivenoteID(): string {
+		return this.activenoteID;
 	}
 
 	public getNoteData(noteID?: string): { id: string, title: string, isUnsaved: boolean } | null {
-		noteID = noteID || this.activeNoteId;
+		noteID = noteID || this.activenoteID;
 		const note = this.notes.get(noteID);
 		if (!note) return null;
 		return { id: noteID, title: note.title, isUnsaved: note.isUnsaved() }; 
 	}
 
 	public getPersistentText(noteID?: string): string {
-		noteID = noteID || this.activeNoteId;
+		noteID = noteID || this.activenoteID;
 		const note = this.notes.get(noteID);
 		if (!note) return ''; // TODO
 
@@ -343,10 +395,9 @@ export class NoteManager {
 	}
 
 	public getCurrentEntries(): Entry[] {
-		const note = this.notes.get(this.activeNoteId);
+		const note = this.notes.get(this.activenoteID);
 		if (!note) return [];
-
-		return note.getOwnEntries();
+		return note.entries;
 	}
 
 	public getUnopenedNotes(): string[] {
@@ -361,12 +412,13 @@ export class NoteManager {
 		// Append entry, mark note unsaved, trigger re-render callback
 		if (entryText.trim().length == 0) return null;
 
-		const note = this.notes.get(this.activeNoteId);
+		const note = this.notes.get(this.activenoteID);
 		if (!note) return null;
+		console.log(entryText);
 		
 		// If the time elapsed between (now) and when the previous entry was created is over a certain threshold, the entry will not be displayed in the same group.
 		// This is mostly a visual effect, but pre-calculating it now saves the renderer from having to do it.
-		const entries = note?.getOwnEntries();
+		const entries = note.getOwnEntries();
 		let groupID = 0;
 
 		if (entries.length > 0) {
@@ -383,9 +435,13 @@ export class NoteManager {
 		const newEntry = new Entry(entries ? entries.length : 0, groupID, entryText, currentTime, indentLevel);
 		note.addEntry(newEntry);
 
-		if (!this.cachedData.unsavedEntries[note.id]) this.cachedData.unsavedEntries[note.id] = [];
-		this.cachedData.unsavedEntries[note.id].push(newEntry);
+		// if (!this.cachedData.unsavedEntries[note.id]) this.cachedData.unsavedEntries[note.id] = [];
+		// this.cachedData.unsavedEntries[note.id].push(newEntry);
 
+		if (this.activenoteID == '.overview') {
+			this.updateOverview();
+		}
+		this.writeToCache();
 		return newEntry;
 	}
 
@@ -399,34 +455,43 @@ export class NoteManager {
 		return false;
 	}
 
-	private isNoteIDValid(noteID: string): boolean {
-		return (this.openNotes.has(noteID) || this.unopenedNotes.has(noteID));
+	public reorderOpenNotes(noteID: string, newIndex: number): void {
+		if (newIndex > this.openNotes.length) return;
+		if (!this.openNotes.includes(noteID)) return;
+
+		this.openNotes.splice(this.openNotes.indexOf(noteID), 1);
+		this.openNotes.splice(newIndex, 0, noteID);
+		this.writeToCache();
+	}
+
+	private isnoteIDValid(noteID: string): boolean {
+		return (this.openNotes.includes(noteID) || this.unopenedNotes.includes(noteID));
 	}
 
 	public async writeToCache(): Promise<void> {
-		this.cachedData.currentNoteId = this.activeNoteId;
-		this.cachedData.openNotes = Array.from(this.openNotes);
+		this.cachedData.currentnoteID = this.activenoteID;
+		this.cachedData.openNotes = this.openNotes;
+		
+		// for (const noteID in this.cachedData.unsavedEntries) {
+		// 	if (!this.isnoteIDValid(noteID)) {
+		// 		delete this.cachedData.unsavedEntries[noteID];
+		// 	}
+		// }
 
-		for (const noteId in this.cachedData.unsavedEntries) {
-			if (!this.isNoteIDValid(noteId)) {
-				delete this.cachedData.unsavedEntries[noteId];
-			}
-		}
-
-		for (const noteId in this.cachedData.unsavedPersistentText) {
-			if (!this.isNoteIDValid(noteId)) {
-				delete this.cachedData.unsavedPersistentText[noteId];
-			}
-		}
+		// for (const noteID in this.cachedData.unsavedPersistentText) {
+		// 	if (!this.isnoteIDValid(noteID)) {
+		// 		delete this.cachedData.unsavedPersistentText[noteID];
+		// 	}
+		// }
 
 		await NoteUtils.writeCache(this.userSettings.cacheFileName, JSON.stringify(this.cachedData, null, 2));
 	}
 }
 
 interface SessionData {
-	currentNoteId: string;
-	unsavedEntries: Record<string, Entry[]>;
-	unsavedPersistentText: Record<string, string>;
+	currentnoteID: string;
+	//unsavedEntries: Record<string, Entry[]>;
+	//unsavedPersistentText: Record<string, string>;
 	openNotes: string[];
 	// TODO: Also save:
 		// Expanded or collapsed hierarchies

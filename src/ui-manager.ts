@@ -79,6 +79,7 @@ export class UIManager {
 		this.setupSidebarClickHandler();
 		this.setupTabDragging();
 		this.setupLogInput();
+		this.setupEntryHighlighting();
 	}
 
 	private setupKeyboardShortcuts(): void {
@@ -282,7 +283,55 @@ export class UIManager {
 		this.logInput.value = '';
 		this.displayCurrentEntries();
 		this.updateSaveStateDisplay();
-		console.log(this.noteManager.getCurrentEntries());
+	}
+
+	private setupEntryHighlighting(): void {
+		this.entriesContainer.addEventListener('mouseover', (e) => {
+			const target = e.target as HTMLElement;
+			let span = null;
+			if (target.classList.contains('entry-text')) {
+				
+				if (target.firstElementChild.tagName == 'SPAN') {
+					const firstSpan = target.firstElementChild as HTMLSpanElement;
+					if (target.children.length > 1) {
+						if (firstSpan.nextElementSibling.tagName == 'SPAN') {
+							span = firstSpan.nextElementSibling;
+						} else {
+							span = firstSpan;
+						}
+					} else {
+						span = firstSpan;
+					}
+				}
+			} else if (target.tagName == 'SPAN') {
+				span = target;
+			}
+			if (span) {
+				if (span.textContent) {
+					const rect = span.getBoundingClientRect();
+					const parentRect = this.entriesContainer.getBoundingClientRect();
+
+					const margin = 8;
+					const top = rect.top - parentRect.top - (margin - 2);
+					const height = rect.height + (2 * margin);
+					this.entriesContainer.style.setProperty('--line-top', `${top}px`);
+					this.entriesContainer.style.setProperty('--line-height', `${height}px`);
+				} else {
+					this.clearLineHighlighting();
+				}
+			} else {
+				this.clearLineHighlighting();
+			}
+		});
+
+		this.entriesContainer.addEventListener('mouseleave', () => {
+			this.clearLineHighlighting();
+		})
+	}
+
+	private clearLineHighlighting(): void {
+		this.entriesContainer.style.setProperty('--line-top', '0px');
+		this.entriesContainer.style.setProperty('--line-height', '0px');
 	}
 
 

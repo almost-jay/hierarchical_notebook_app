@@ -32,8 +32,6 @@ export class NoteManager {
 		
 		this.cachedData = {
 			currentnoteID: this.notes.get(this.activenoteID) ? this.activenoteID : '.overview',
-			//unsavedEntries: {},
-			//unsavedPersistentText: {},
 			openNotes: [],
 		};
 	}
@@ -88,43 +86,6 @@ export class NoteManager {
 		const results: { id: string, title: string }[] = [];
 		this.cachedData = { ...this.cachedData, ...cacheParsed };
 
-		// for (const noteID in this.cachedData.unsavedEntries) {
-		// 	if (this.isnoteIDValid(noteID)) {
-		// 		const note = this.notes.get(noteID);
-		// 		const unsavedEntries = this.cachedData.unsavedEntries[noteID];
-		// 		if (unsavedEntries) {
-		// 			const result = await this.confirmRestoreCachedEntries(noteID, unsavedEntries);
-		// 			if (result) { // TODO: Add setting to autorestore
-		// 				for (const entry of unsavedEntries) {
-		// 					note.addEntry(entry);
-		// 				}
-						
-		// 			} else {
-		// 				delete this.cachedData.unsavedEntries[noteID];
-		// 			}
-		// 		}
-		// 	} else {
-		// 		delete this.cachedData.unsavedEntries[noteID];
-		// 	}
-		// }
-		
-		// for (const noteID in this.cachedData.unsavedPersistentText) {
-		// 	if (this.isnoteIDValid(noteID)) {
-		// 		const unsavedText = this.cachedData.unsavedPersistentText[noteID];
-		// 		if (!(!unsavedText || unsavedText == this.notes.get(noteID).getPersistentTextContent())) { // Possibly an unnecessary check?
-		// 			const result = await confirm(`Restore unsaved text: "...${unsavedText.slice(unsavedText.length - Math.min(unsavedText.length, this.userSettings.restoreTextPreviewLength))}" for ${noteID}?`);
-		// 			if (result) { // TODO: Add setting to autorestore
-						
-		// 				this.notes.get(noteID).updatePersistentTextContent(unsavedText); // FIXME
-		// 			} else {
-		// 				delete this.cachedData.unsavedPersistentText[noteID];
-		// 			}
-		// 		}
-		// 	} else {
-		// 		delete this.cachedData.unsavedPersistentText[noteID];
-		// 	}
-		// }
-
 		for (const noteID of this.cachedData.openNotes) {
 			if (this.isnoteIDValid(noteID)) {
 				const result = this.openNoteData(noteID);
@@ -139,32 +100,6 @@ export class NoteManager {
 		this.activenoteID = this.notes.has(this.cachedData.currentnoteID) ? this.cachedData.currentnoteID : '.overview';
 		await this.writeToCache();
 		return results;
-	}
-
-	private confirmRestoreCachedEntries(noteID: string, entries: Entry[]): boolean {
-		if (entries.length < 1) return;
-		switch (entries.length) {
-		case 1:	{
-			let entryText = entries[0].text;
-			if (entryText.length > this.userSettings.restoreTextPreviewLength) {
-				entryText = entryText.slice(0, this.userSettings.restoreTextPreviewLength);
-			}
-			return confirm(`Restore unsaved entry: ${entryText}... for ${noteID}?`); }
-		case 2: {
-			let entryTextFirst = entries[0].text;
-			if (entryTextFirst.length > this.userSettings.restoreTextPreviewLength / 2) {
-				entryTextFirst = entryTextFirst.slice(0, Math.floor(this.userSettings.restoreTextPreviewLength / 2));
-				entryTextFirst += '...';
-			}
-			let entryTextSecond = entries[1].text;
-			if (entryTextSecond.length > this.userSettings.restoreTextPreviewLength / 2) {
-				entryTextSecond = entryTextSecond.slice(0, Math.floor(this.userSettings.restoreTextPreviewLength / 2));
-				entryTextSecond += '...';
-			}
-			return confirm(`Restore 2 unsaved entries: ${entryTextFirst}, and ${entryTextSecond} for ${noteID}?`); }
-		default:
-			return confirm(`Restore ${entries.length} entries for ${noteID}?`);
-		}
 	}
 
 	public async loadUserSettings(): Promise<void> {
@@ -397,7 +332,7 @@ export class NoteManager {
 	public getCurrentEntries(): Entry[] {
 		const note = this.notes.get(this.activenoteID);
 		if (!note) return [];
-		return note.entries;
+		return note.entries; // deliberately .entries and not .getOwnEntries()
 	}
 
 	public getUnopenedNotes(): string[] {
@@ -418,22 +353,9 @@ export class NoteManager {
 		
 		// If the time elapsed between (now) and when the previous entry was created is over a certain threshold, the entry will not be displayed in the same group.
 		// This is mostly a visual effect, but pre-calculating it now saves the renderer from having to do it.
-		const entries = note.getOwnEntries();
-		let groupID = 0;
-
-		if (entries.length > 0) {
-			groupID = entries[entries.length - 1].groupId;
-			const previousEntryCreated = entries[entries.length - 1].created;
-			const timeSincePreviousEntry = currentTime.getTime() - previousEntryCreated.getTime();
-			if (timeSincePreviousEntry / 60000 > this.userSettings.groupInterval) {
-				groupID++;
-			}
-		}
-
 		const splitLines = entryText.split('\n');
 		const indentLevel = NoteUtils.countLeadingTabs(splitLines[splitLines.length - 1], this.userSettings.indentString);
-		const newEntry = new Entry(entries ? entries.length : 0, groupID, entryText, currentTime, indentLevel);
-		note.addEntry(newEntry);
+		const newEntry = note.createNewEntry(entryText, currentTime, indentLevel, this.userSettings.groupInterval);
 
 		// if (!this.cachedData.unsavedEntries[note.id]) this.cachedData.unsavedEntries[note.id] = [];
 		// this.cachedData.unsavedEntries[note.id].push(newEntry);
@@ -471,18 +393,6 @@ export class NoteManager {
 	public async writeToCache(): Promise<void> {
 		this.cachedData.currentnoteID = this.activenoteID;
 		this.cachedData.openNotes = this.openNotes;
-		
-		// for (const noteID in this.cachedData.unsavedEntries) {
-		// 	if (!this.isnoteIDValid(noteID)) {
-		// 		delete this.cachedData.unsavedEntries[noteID];
-		// 	}
-		// }
-
-		// for (const noteID in this.cachedData.unsavedPersistentText) {
-		// 	if (!this.isnoteIDValid(noteID)) {
-		// 		delete this.cachedData.unsavedPersistentText[noteID];
-		// 	}
-		// }
 
 		await NoteUtils.writeCache(this.userSettings.cacheFileName, JSON.stringify(this.cachedData, null, 2));
 	}
@@ -490,8 +400,6 @@ export class NoteManager {
 
 interface SessionData {
 	currentnoteID: string;
-	//unsavedEntries: Record<string, Entry[]>;
-	//unsavedPersistentText: Record<string, string>;
 	openNotes: string[];
 	// TODO: Also save:
 		// Expanded or collapsed hierarchies

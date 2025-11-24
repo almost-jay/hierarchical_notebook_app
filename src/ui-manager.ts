@@ -282,6 +282,7 @@ export class UIManager {
 		this.logInput.value = '';
 		this.displayCurrentEntries();
 		this.updateSaveStateDisplay();
+		console.log(this.noteManager.getCurrentEntries());
 	}
 
 
@@ -624,9 +625,8 @@ export class UIManager {
 			} else {
 				this.entriesContainer.appendChild(entryDiv);
 			}
-			
 
-			i = nextIndex;
+			i = nextIndex - 1;
 		}
 	}
 

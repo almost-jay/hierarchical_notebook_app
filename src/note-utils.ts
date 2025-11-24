@@ -95,6 +95,18 @@ export class NoteUtils {
 		await writeTextFile(`${filename}.json`, content, { baseDir: BaseDirectory.AppConfig });
 	}
 
+	public static startOfDay(date: Date): Date {
+		return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0); 
+	}
+
+	public static startOfDayString(date: string): string {
+		return NoteUtils.formatDate(NoteUtils.startOfDay(new Date(date)));
+	}
+
+	public static startOfTodayString(): string { // CHECK: useless
+		return NoteUtils.formatDate(NoteUtils.startOfDay(new Date()));
+	}
+
 	public static formatDateTime(date: Date): string {
 		const result = `${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')} ${date.getFullYear()}-${(date.getMonth()+1).toString().padStart(2,'0')}-${date.getDate().toString().padStart(2,'0')}`;
 		return result;
@@ -102,7 +114,11 @@ export class NoteUtils {
 	}
 
 	public static formatDate(date: Date): string {
-		return date.toISOString().slice(0,10);
+		const year = date.getFullYear();
+		const month = (date.getMonth() + 1).toString().padStart(2, '0');
+		const day = date.getDate().toString().padStart(2, '0');
+		console.log(`${year}-${month}-${day}`);
+		return `${year}-${month}-${day}`;
 	}
 
 	public static countLeadingTabs(line: string, indentString: string): number {

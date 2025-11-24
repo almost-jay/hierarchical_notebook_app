@@ -12,8 +12,10 @@ export class Overview extends Note {
 	public constructor() {
 		super('Overview'); // Creates a note with the hard-set title "overview"
 		this.id = '.'+this.id; // force a . in front of title for file reasons
-		this.selectedDates = new DateRange(new Date());
-		this.validDates = new DateRange(new Date());
+
+		const startOfToday = NoteUtils.startOfDay(new Date());
+		this.selectedDates = new DateRange(startOfToday);
+		this.validDates = new DateRange(startOfToday);
 		this.isPersistentTextUnsaved = false;
 		this.isTitleSet = true;
 	}
@@ -55,6 +57,8 @@ export class Overview extends Note {
 		for (const entryWrapper of sortedEntries) {
 			const currentEntry = entryWrapper.entry;
 			const day = NoteUtils.formatDate(entryWrapper.entry.created);
+			console.log(day);
+			console.log(entryWrapper.entry.created);
 			if (!aggregatedEntries[day]) aggregatedEntries[day] = [];
 
 			let isNewGroup = false;
@@ -77,6 +81,40 @@ export class Overview extends Note {
 			previousEntryWrapper = entryWrapper;
 		}
 		return aggregatedEntries;
+	}
+
+	public createNewEntry(entryText: string, currentTime: Date, indentLevel: number, groupInterval: number, sourcenoteID?: string): Entry {
+		// Determine groupID based on time and source note
+		let groupID = 0;
+		const entries = this.overviewEntries;
+		if (entries.length > 0) {
+			const prevEntry = entries[entries.length - 1];
+			groupID = prevEntry.groupId;
+			const timeSincePrev = currentTime.getTime() - prevEntry.created.getTime();
+			// If time gap or source note changes, increment group
+			if (
+				timeSincePrev / 60000 > groupInterval ||
+            (sourcenoteID && (prevEntry as Entry)['sourcenoteID'] !== sourcenoteID)
+			) {
+				groupID++;
+			}
+		}
+
+		// Create new entry
+		const newEntry = new Entry(entries.length, groupID, entryText, currentTime, indentLevel);
+
+		// Add to overviewEntries
+		this.overviewEntries.push(newEntry);
+		this.isEntriesUnsaved = true;
+
+		// Re-aggregate for display using EntryWithSource
+		const allEntries: EntryWithSource[] = this.overviewEntries.map(e => ({
+			entry: e,
+			sourcenoteID: sourcenoteID || this.id,
+		}));
+		this.updateEntries(allEntries);
+
+		return newEntry;
 	}
 
 	public addEntry(newEntry: Entry): void {
@@ -206,6 +244,7 @@ class DateRange {
 	public setStart(newStart: string): void {
 		this.start = newStart;
 		this.range = DateRange.daysBetweenDates(new Date(this.start), new Date(newStart));
+		// We don't need to bother updating these to local time thankfully
 	}
 
 	public getEarlierDate(): string {

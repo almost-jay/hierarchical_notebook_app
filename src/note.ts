@@ -15,7 +15,7 @@ export class Note {
 
 	public constructor(title: string, created?: Date, lastSaved?: Date, savedPersistentText?: string) {
 		this.updateTitle(title);
-		this.created = created ?? new Date();
+		this.created = created ?? NoteUtils.startOfDay(new Date());
 		if (lastSaved) this.lastSaved = lastSaved;
 		if (savedPersistentText) this.savedPersistentText = savedPersistentText;
 	}
@@ -136,8 +136,26 @@ export class Note {
 		return this.entries;
 	}
 	
-	public addEntry(newEntry: Entry): void {
-		this.entries.push(newEntry);
+	public createNewEntry(entryText: string, currentTime: Date, indentLevel: number, groupInterval: number): Entry {
+		const entries = this.entries;
+		let groupID = 0;
+
+		if (entries.length > 0) {
+			groupID = entries[entries.length - 1].groupId;
+			const previousEntryCreated = entries[entries.length - 1].created;
+			const timeSincePreviousEntry = currentTime.getTime() - previousEntryCreated.getTime();
+			if (timeSincePreviousEntry / 60000 > groupInterval) {
+				groupID++;
+			}
+		}
+		const newEntry = new Entry(this.entries.length, groupID, entryText, currentTime, indentLevel);
+		this.addEntry(newEntry);
+
+		return newEntry;
+	}
+
+	public addEntry(entry: Entry): void {
+		this.entries.push(entry);
 		this.isEntriesUnsaved = true;
 	}
 

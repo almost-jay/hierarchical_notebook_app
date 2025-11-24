@@ -49,7 +49,7 @@ export class Note {
 					newNote.addEntry(newEntry)
 					i += 25 + textLength;
 				}
-
+				newNote.isEntriesUnsaved = false;
 				return newNote;
 			} else {
 				console.error(`Could not find entries file ${entriesFileName}!`);
@@ -65,7 +65,9 @@ export class Note {
 	}
 
 	public isUnsaved(): boolean {
-		return this.isPersistentTextUnsaved || this.isEntriesUnsaved;
+		const result = this.isPersistentTextUnsaved || this.isEntriesUnsaved;
+		return result;
+		
 	}
 
 	public getPersistentTextContent(): string {
@@ -117,7 +119,6 @@ export class Note {
 
 		this.lastSaved = new Date();
 		const frontmatter: string = `---\ntitle: ${this.title}\ncreated: ${this.created.getTime()}\nlastSaved: ${this.lastSaved.getTime()}\n---\n`;
-		console.log(frontmatter + this.persistentText);
 		await NoteUtils.writeMarkdownFile(persistentFileName, frontmatter + this.persistentText);
 		await NoteUtils.writeBinaryFile(entriesFileName, entriesAsBinary);
 

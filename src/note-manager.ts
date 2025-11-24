@@ -3,14 +3,16 @@ import { Note } from './note';
 import { NoteUtils } from './note-utils';
 import { Overview } from './overview';
 
+const CONFIG_FILENAME = 'config';
+
 export class NoteManager {
-	private notes: Map<string, Note>;
-	private overview: Overview;
+	public notes: Map<string, Note>;
+	public overview: Overview;
 	private activeNoteId: string = '.overview';
 	private openNotes: Set<string>; //openNotes ∩ unopenedNotes = ∅ 
 	private unopenedNotes: Set<string>; 
 	private cachedData: SessionData;
-	private userSettings: UserSettings = {
+	public userSettings: UserSettings = {
 		indentString: '\t',
 		groupInterval: 5, // minutes
 		noteIndexFileName: '.note-headings',
@@ -39,17 +41,11 @@ export class NoteManager {
 	/**
 	 * @todo TRY/CATCH FOR THIS ONE
 	 */
-	private async loadAllNotes(): Promise<{ id: string, title: string }[]> {
-		// loadAllNotes and part of initialiseAsync
-		// Ensure all notes exist internally
-		// Place each note ID in unopenednotes
-		// Load overview note metadata but NOT content
-
-		// Set savedPersistentText = loaded content
+	public async loadAllNotes(): Promise<{ id: string, title: string }[]> {
 
 		const notesAdded = [];
-		const noteHeadingsFileName = this.userSettings.noteIndexFileName+'.md';
-		if (await NoteUtils.doesFileExist(noteHeadingsFileName)) {
+		const noteHeadingsFileName = this.userSettings.noteIndexFileName;
+		if (await NoteUtils.doesFileExist(noteHeadingsFileName+'.md')) {
 			const noteIDList: string[] = (await NoteUtils.getMarkdownFile(noteHeadingsFileName)).split('\n');
 			for (const noteID of noteIDList) {
 				if (noteID == '') continue;
@@ -80,26 +76,58 @@ export class NoteManager {
 
 	/**
 	 * 
-	 * @returns {string[]} A list of note IDs that need to be opened!
+	 * @returns { { id: string, title: string }[]} A list of note IDs that need to be opened!
 	 */
-	public async restorePreviousSession(): Promise<string[]> {
+	public async restorePreviousSession(): Promise< { id: string, title: string }[]> {
 		if (! (await NoteUtils.doesCacheExist(this.userSettings.cacheFileName))) return [];
 
 		const cacheText = await NoteUtils.readCache(this.userSettings.cacheFileName);
 		const cacheParsed = JSON.parse(cacheText) as Partial<SessionData>;
 
+		const results: { id: string, title: string }[] = [];
 		this.cachedData = { ...this.cachedData, ...cacheParsed };
 
-		for (const noteID of this.cachedData.openNotes) {
-			this.openNote(noteID);
+		for (const noteID in this.cachedData.unsavedPersistentText) {
+			const unsavedText = this.cachedData.unsavedPersistentText[noteID];
+			if (!(!unsavedText || unsavedText == this.notes.get(noteID).getPersistentTextContent())) {
+				const result = await confirm(`Restore unsaved text: ...${unsavedText.slice(unsavedText.length - this.userSettings.restoreTextPreviewLength)} for ${noteID}?`);
+				if (result) { // TODO: Add setting to autorestore
+					
+					this.notes.get(noteID).updatePersistentTextContent(unsavedText); // FIXME
+				} else {
+					this.cachedData.unsavedPersistentText[noteID] = '';
+				}
+			} else {
+				this.notes.get(noteID).updateSavedPersistentTextContent(this.notes.get(noteID).getPersistentTextContent()); // ???
+			}
 		}
 
-		return Array.from(this.openNotes);
+		for (const noteID of this.cachedData.openNotes) {
+			const result = this.openNoteData(noteID);
+			if (result == null) {
+				throw new Error(`Could not open: ${noteID}`);
+			} else {
+				results.push(result);
+			}
+		}
+
+		return results;
 	}
 
-	private createNewNote(noteTitle: string): void {
+	public async loadUserSettings(): Promise<void> {
+		if (await NoteUtils.doesConfigExist(CONFIG_FILENAME)) {
+			const configText = await NoteUtils.readConfig(CONFIG_FILENAME);
+			const configParsed = JSON.parse(configText) as Partial<UserSettings>;
+
+			this.userSettings = {...this.userSettings, ...configParsed };
+		}
+	}
+
+	public createNewNote(noteTitle?: string): string {
+		noteTitle = noteTitle || `Untitled ${this.notes.size}`;
 		const newNote = new Note(noteTitle);
 		this.addNewNote(newNote);
+		return newNote.id;
 	}
 
 	private addNewNote(newNote: Note): void {
@@ -121,7 +149,7 @@ export class NoteManager {
 	 * @param noteID the ID of the note to attempt to change to
 	 * @returns a string/null containing the ID of the current note
 	 */
-	private changeCurrentNote(noteID: string): { noteID: string, textContent: string } | null {
+	public changeCurrentNote(noteID: string): string | null {
 		// Same logic as setCurrentNote minus the dom shit
 		// logic inside the tab click handlers?
 		// Fires onActiveNoteChanged(noteID)
@@ -131,35 +159,46 @@ export class NoteManager {
 		this.activeNoteId = noteID;
 		this.cachedData.currentNoteId = noteID;
 
-		const note = this.notes.get(noteID);
-		if (!note) return null;
-		const textContent = note.getPersistentTextContent();
-		
-		return  { noteID, textContent: textContent };
+		return noteID;
+	}
+
+	public updateOverview(): void {
+		const allEntries = [];
+		this.overview.clearEntries();
+		for (const note of this.notes.values()) {
+			allEntries.push(...note.entries.map(entry => ({ entry: entry, sourceNoteId: note.id })));  // Deliberately using .entries instead of getOwnEntries here
+		}
+		this.overview.updateEntries(allEntries);
 	}
 
 	/**
 	 * @todo use try/catch
 	 */
-	public openNote(noteID: string): void {
+	public openNoteData(noteID: string): { id: string, title: string } | null {
 		// UIManager will do all the dom stuff
 
 		// Move ID from unopened to openNotes
 		// Update internal metadata
-		if (!this.unopenedNotes.has(noteID)) throw new Error(`Could not find note with id ${noteID}`);
+
+		if (!this.unopenedNotes.has(noteID)) throw new Error(`Could not find note with id ${noteID} to open it`);
 
 		this.unopenedNotes.delete(noteID);
 		this.openNotes.add(noteID);
+
+		const note = this.notes.get(noteID);
+		if (!note) return null;
+
+		return { id: noteID, title: note.title };
 	}
 
 	/**
 	 * @todo Use a try/catch; also remember to select the returned note in DOM
 	 */
-	private closeCurrentNote(): string {
+	public closeCurrentNote(): string {
 		// Remove note from openNotes and select fallback active note
 		// Basically the same but without the DOM shit
 
-		if (!this.openNotes.has(this.activeNoteId)) throw new Error(`Could not find note with id ${this.activeNoteId}`);
+		if (!this.openNotes.has(this.activeNoteId)) throw new Error(`Could not find note with id ${this.activeNoteId} to close it`);
 
 		this.openNotes.delete(this.activeNoteId);
 		this.unopenedNotes.add(this.activeNoteId);
@@ -175,8 +214,8 @@ export class NoteManager {
 	 * Call updatePersistentText() before this
 	 * @returns 
 	 */
-	private async saveAllNotes(): Promise<{ success: boolean; oldID: string; newID: string; }[]> {
-		const results: { success: boolean, oldID: string, newID: string }[] = [];
+	public async saveAllNotes(): Promise<{ success: boolean; oldID: string; newID: string; newTitle: string }[]> {
+		const results: { success: boolean, oldID: string, newID: string; newTitle: string }[] = [];
 
 		for (const note of this.notes.values()) {
 			const currentId = note.id; // this is a bit of a misnomer because current ≠ up to date
@@ -192,9 +231,9 @@ export class NoteManager {
 	 * @param noteID 
 	 * @returns 
 	 */
-	private async saveNote(noteID: string): Promise<{ success: boolean, oldID: string, newID: string }> {
+	public async saveNote(noteID: string): Promise<{ success: boolean, oldID: string, newID: string, newTitle: string }> {
 		const note = this.notes.get(noteID);
-		if (!note) return { success: false, oldID: noteID, newID: noteID };
+		if (!note) return { success: false, oldID: noteID, newID: noteID, newTitle: '' };
 
 		const oldID = noteID;
 		const result = await note.save();
@@ -214,21 +253,20 @@ export class NoteManager {
 			}
 		}
 
-		return { success: result, oldID, newID };
+		return { success: result, oldID, newID, newTitle: note.title };
 	}
 
-	private async saveMetadata(): Promise<void> {
+	public async saveMetadata(): Promise<void> {
 		const noteHeadings = Array.from(this.openNotes).join('\n') + '\n' + Array.from(this.unopenedNotes).join('\n');
 		await NoteUtils.writeMarkdownFile(this.userSettings.noteIndexFileName,noteHeadings);
 		await this.writeToCache();
 	}
-
 	/**
 	 * 
 	 * @param newTitle 
 	 * @returns the new ID and title
 	 */
-	private updateNoteTitle(oldID: string, rawNewTitle: string): { oldID: string, newID: string, newTitle: string } | null {
+	public updateNoteTitle(oldID: string, rawNewTitle: string): { oldID: string, newID: string, newTitle: string } | null {
 		// Old logic
 		// Validate title
 		// Update note.title
@@ -254,28 +292,71 @@ export class NoteManager {
 		return { oldID, newID, newTitle };
 	}
 
-	private updatePersistentText(noteID: string, newText: string): void {
+	/**
+	 * 
+	 * @param newText 
+	 * @param noteID 
+	 * @returns true if the save state changed
+	 */
+	public updatePersistentText(newText: string, noteID?: string): boolean {
 		// Update note.persistentText
 		// Trigger cache update callback
 		// Notify UI that note's unsaved state changed
-
+		noteID = noteID || this.activeNoteId;
 		const note = this.notes.get(noteID);
-		if (!note) return;
+		if (!note) return false;
 		
+		const wasUnsaved = note.isUnsaved();
+
 		note.updatePersistentTextContent(newText);
 		
+		const isUnsavedNow = note.isUnsaved();
+
 		if (note.isUnsaved()) {
 			this.cachedData.unsavedPersistentText[noteID] = newText;
 			this.writeToCache();
 		} else if (noteID in this.cachedData.unsavedPersistentText) {
 			delete this.cachedData.unsavedPersistentText[noteID];
+			this.writeToCache();
 		}
+
+		return wasUnsaved != isUnsavedNow;
+	}
+
+	public getActiveNoteID(): string {
+		return this.activeNoteId;
+	}
+
+	public getNoteData(noteID?: string): { id: string, title: string, isUnsaved: boolean } | null {
+		noteID = noteID || this.activeNoteId;
+		const note = this.notes.get(noteID);
+		if (!note) return null;
+		return { id: noteID, title: note.title, isUnsaved: note.isUnsaved() }; 
+	}
+
+	public getPersistentText(noteID?: string): string {
+		noteID = noteID || this.activeNoteId;
+		const note = this.notes.get(noteID);
+		if (!note) return ''; // TODO
+
+		return note.getPersistentTextContent();
+	}
+
+	public getCurrentEntries(): Entry[] {
+		const note = this.notes.get(this.activeNoteId);
+		if (!note) return [];
+
+		return note.getOwnEntries();
+	}
+
+	public getUnopenedNotes(): string[] {
+		return Array.from(this.unopenedNotes);
 	}
 
 	/** 
 	 * UIManager: Take the newEntry passed back and add it to the DOM
 	*/
-	private submitEntry(entryText: string, currentTime: Date): Entry | null {
+	public submitEntry(entryText: string, currentTime: Date): Entry | null {
 		// UI will supply raw text and current time
 		// Append entry, mark note unsaved, trigger re-render callback
 		if (entryText.trim().length == 0) return null;
@@ -298,7 +379,7 @@ export class NoteManager {
 		}
 
 		const splitLines = entryText.split('\n');
-		const indentLevel = this.countLeadingTabs(splitLines[splitLines.length - 1]);
+		const indentLevel = NoteUtils.countLeadingTabs(splitLines[splitLines.length - 1], this.userSettings.indentString);
 		const newEntry = new Entry(entries ? entries.length : 0, groupID, entryText, currentTime, indentLevel);
 		note.addEntry(newEntry);
 
@@ -322,7 +403,7 @@ export class NoteManager {
 		return (this.openNotes.has(noteID) || this.unopenedNotes.has(noteID));
 	}
 
-	private async writeToCache(): Promise<void> {
+	public async writeToCache(): Promise<void> {
 		this.cachedData.currentNoteId = this.activeNoteId;
 		this.cachedData.openNotes = Array.from(this.openNotes);
 
@@ -340,16 +421,6 @@ export class NoteManager {
 
 		await NoteUtils.writeCache(this.userSettings.cacheFileName, JSON.stringify(this.cachedData, null, 2));
 	}
-
-	private countLeadingTabs(line: string): number {
-		return line.match(new RegExp(`^${this.userSettings.indentString}+`))?.[0].length || 0;
-
-	}
-
-	private stripLeadingTabs(line: string): string {
-		return line.replace(new RegExp(`^${this.userSettings.indentString}+`), '');
-	}
-
 }
 
 interface SessionData {

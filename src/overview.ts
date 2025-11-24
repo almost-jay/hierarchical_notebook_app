@@ -4,8 +4,8 @@ import { NoteUtils } from './note-utils';
 
 export class Overview extends Note {
 	public overviewEntries: Entry[] = [];
-	public earliestDate: string;
-	public currentDate: string;
+	private earliestDate: string;
+	private currentDate: string;
 	private selectedDateRange: DateRange;
 	private aggregatedEntries: EntriesByDay;
 	private selectedNoteId?: string;
@@ -144,6 +144,10 @@ export class Overview extends Note {
 
 	public getOwnEntries(): Entry[] {
 		return this.overviewEntries;
+	}
+
+	public getDates(): { earliest: string, latest: string } {
+		return { earliest: this.earliestDate, latest: this.currentDate };
 	}
 }
 

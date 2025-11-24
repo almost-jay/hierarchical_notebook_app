@@ -100,4 +100,14 @@ export class NoteUtils {
 
 	}
 
+	public static countLeadingTabs(line: string, indentString: string): number {
+		return line.match(new RegExp(`^${indentString}+`))?.[0].length || 0;
+
+	}
+
+	public static stripLeadingTabs(line: string, indentString: string): string {
+		return line.replace(new RegExp(`^${indentString}+`), '');
+	}
+
+
 }

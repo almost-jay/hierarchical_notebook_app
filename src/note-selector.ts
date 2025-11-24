@@ -83,7 +83,6 @@ export class NoteSelector {
 			});
 
 			li.addEventListener('click', () => {
-				console.log(note);
 				this.onSelectCallback(note);
 				this.hideModal();
 			});

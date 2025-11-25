@@ -308,8 +308,25 @@ export class UIManager {
 				case 'edit': // possibly evil and bad (should use id instead)
 					this.noteManager.editEntry(this.highlightedEntryID);
 					break;
+				case 'format_quote':
+					// quote/reply to entry
+					break;
+				case 'content_copy':
+					// copy entry text
+					break;
+				case 'keep':
+					// pin entry:
+					break;
+				case 'keep_off':
+					// unpin entry
+					break;
+				case 'delete':
+					// delete entry
+					break;
 				}
 			}
+
+			// WRITE TO CACHE HERE
 		});
 
 		this.entriesContainer.addEventListener('mouseover', (e) => {
@@ -564,7 +581,7 @@ export class UIManager {
 			
 			const timestampSpan = document.createElement('span');
 			// TODO: Go through the entire group and get the most recently edited date, and use that
-			timestampSpan.textContent = NoteUtils.formatDateTime(entries[i].created); // TODO: Relative/contextual/fuzzy time
+			timestampSpan.textContent = NoteUtils.getRelativeTime(entries[i].created); // TODO: Relative/contextual/fuzzy time
 			entryHeader.appendChild(timestampSpan);
 
 			entryDiv.appendChild(entryHeader);

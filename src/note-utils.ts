@@ -107,6 +107,25 @@ export class NoteUtils {
 		return NoteUtils.formatDate(NoteUtils.startOfDay(new Date()));
 	}
 
+	public static getRelativeTime(date: Date): string {
+		const timeElapsed = (new Date().getTime() - date.getTime()); // time since date in seconds
+
+		const SECOND = 1000;
+    	const MINUTE = 60000;
+    	const HOUR   = 3600000;
+    	const DAY    = 86400000;
+
+		switch (true) {
+		case timeElapsed < 10 * SECOND: return 'Just now';
+		case timeElapsed < MINUTE: 		return `${Math.round(timeElapsed / SECOND)} seconds ago`;
+		case timeElapsed < HOUR: 		return `${Math.round(timeElapsed / MINUTE)} minutes ago`;
+		case timeElapsed < 12 * HOUR: 	return NoteUtils.formatTime(date);
+		case timeElapsed < DAY: 		return `Today at ${NoteUtils.formatTime(date)}`;
+		case timeElapsed < 2 * DAY: 	return `Yesterday at ${NoteUtils.formatTime(date)}`;
+		default:						return NoteUtils.formatDateTime(date);
+		}
+	}
+
 	public static formatDateTime(date: Date): string {
 		// const result = `${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')} 	// This is HH:MM YYYY-MM-DD format
 		// ${date.getFullYear()}-${(date.getMonth()+1).toString().padStart(2,'0')}-${date.getDate().toString().padStart(2,'0')}`;

@@ -237,9 +237,6 @@ export class NoteManager {
 			}
 		}
 
-		//if (this.cachedData.unsavedEntries[newID]) delete this.cachedData.unsavedEntries[newID];
-		//if (this.cachedData.unsavedPersistentText[newID]) delete this.cachedData.unsavedPersistentText[newID];
-
 		return { success: result, oldID, newID, newTitle: note.title };
 	}
 

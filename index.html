@@ -17,7 +17,6 @@
 				Overview
 			</label>
 			
-			<input type="text" id="sidebar-filter" placeholder="Filter...">
 			<div class="note-tabs" id="note-tabs">
 				<div>
 					<label class="tab-label" for="tab1">Note 1</label>
@@ -53,8 +52,11 @@
 					<div class="entry-content">
 						<div class="entry-text">
 							<span class="disclosure-widget"></span><span>Note content here</span>
-							<div class="entry-text"><span class="disclosure-widget"></span><span>Nested note content here</span>
-								<div class="entry-text"><span class="disclosure-widget"></span><span>Inception!</span></div>
+							<div class="entry-text">
+								<span class="disclosure-widget"></span><span>Nested note content here</span>
+								<div class="entry-text">
+									<span class="disclosure-widget"></span><span>Inception!</span>
+								</div>
 							</div>
 							<div class="entry-text"><span class="disclosure-widget"></span><span>A second line on the same level</span></div>
 						</div>
@@ -87,6 +89,15 @@
 				<li>option 42</li>
 			</ul>
 		</div>
+	</div>
+
+	<div id="popup-menu">
+		<button class="material-symbols" title="Edit entry">edit</button>
+		<button class="material-symbols" title="Quote entry">format_quote</button>
+		<button class="material-symbols" title="Forward entry">forward</button>
+		<button class="material-symbols" title="Copy text">content_copy</button>
+		<button class="material-symbols" title="Pin entry">keep</button>
+		<button class="material-symbols delete-icon" title="Delete entry">delete</button>
 	</div>
 
   </body>

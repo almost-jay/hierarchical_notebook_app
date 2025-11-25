@@ -409,6 +409,7 @@ div {
 	margin-bottom: 0;
 	align-self: stretch;
 	padding-top: var(--spacing);
+	position: relative;
 }
 
 .entry-text:not(:first-child) {
@@ -485,6 +486,36 @@ div {
 		max-height: var(--logbox-max-height);
 		field-sizing: content;
 	}
+}
+
+#popup-menu {
+	display: none;
+	top: -3vh;
+	right: 0;
+	position: absolute;
+	background-color: var(--c-background-light);
+	padding: calc(var(--spacing) * 0.5);
+	border-radius: var(--corner-round);
+	align-self: center;
+	justify-self: end;
+}
+
+#popup-menu.show {
+	display: flex;
+}
+
+#popup-menu button {
+	font-size: 125%;
+	cursor: pointer;
+}
+
+.delete-icon {
+	color: #cf4a54;
+}
+
+.delete-icon:hover {
+	color: #d98385;
+	background-color: #553533;
 }
 
 .right-panel {

@@ -49,7 +49,6 @@ export class NoteManager {
 				if (noteID == '') continue;
 				
 				if (noteID == '.overview') {
-					console.log('flag??');
 					const newOverview: Overview = await Overview.loadFromFile();
 					this.overview = newOverview;
 					this.notes.set('.overview', this.overview);
@@ -349,7 +348,6 @@ export class NoteManager {
 
 		const note = this.notes.get(this.activenoteID);
 		if (!note) return null;
-		console.log(entryText);
 		
 		// If the time elapsed between (now) and when the previous entry was created is over a certain threshold, the entry will not be displayed in the same group.
 		// This is mostly a visual effect, but pre-calculating it now saves the renderer from having to do it.

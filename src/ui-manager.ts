@@ -10,6 +10,8 @@ export class UIManager {
 	private persistentTextInput: HTMLTextAreaElement;
 	private overviewDateSelector: HTMLInputElement;
 	private overviewDateRangeSelector: HTMLInputElement;
+	private entryPopupMenu: HTMLDivElement;
+	private isPopupMenuActive: boolean = false;
 
 	private currentIndentationLevel: number = 0;
 	private draggedTab: HTMLDivElement | null = null;
@@ -24,6 +26,7 @@ export class UIManager {
 		this.persistentTextInput = document.getElementById('persistent-text-input') as HTMLTextAreaElement;
 		this.overviewDateSelector = document.getElementById('start-date-selector') as HTMLInputElement;
 		this.overviewDateRangeSelector = document.getElementById('date-range-selector') as HTMLInputElement;
+		this.entryPopupMenu = document.getElementById('popup-menu') as HTMLDivElement;
 
 		this.noteTabsContainer.innerHTML = '';
 		this.entriesContainer.innerHTML = '';
@@ -244,7 +247,6 @@ export class UIManager {
 			this.updateLogInputHeight();
 		});
 		this.logInput.addEventListener('keydown', (e) => {
-			// console.log(e);
 			if (e.keyCode == 9) { // Tab key - because Shift + Tab returns e.key == "Unidentified"
 				e.preventDefault();
 				const start: number = this.logInput.selectionStart;
@@ -286,25 +288,32 @@ export class UIManager {
 	}
 
 	private setupEntryHighlighting(): void {
+		this.entryPopupMenu.addEventListener('mouseover', () => {
+			this.isPopupMenuActive = true;
+		});
+		this.entryPopupMenu.addEventListener('mouseleave', () => {
+			this.isPopupMenuActive = false;
+		});
 		this.entriesContainer.addEventListener('mouseover', (e) => {
 			const target = e.target as HTMLElement;
-			let span = null;
+			let span: HTMLSpanElement | null = null;
 			if (target.classList.contains('entry-text')) {
-				
 				if (target.firstElementChild.tagName == 'SPAN') {
 					const firstSpan = target.firstElementChild as HTMLSpanElement;
 					if (target.children.length > 1) {
 						if (firstSpan.nextElementSibling.tagName == 'SPAN') {
-							span = firstSpan.nextElementSibling;
+							span = firstSpan.nextElementSibling as HTMLSpanElement;
 						} else {
 							span = firstSpan;
 						}
 					} else {
 						span = firstSpan;
 					}
+				} else {
+					span = target.querySelector('span');
 				}
 			} else if (target.tagName == 'SPAN') {
-				span = target;
+				span = target as HTMLSpanElement;
 			}
 			if (span) {
 				if (span.textContent) {
@@ -316,6 +325,13 @@ export class UIManager {
 					const height = rect.height + (2 * margin);
 					this.entriesContainer.style.setProperty('--line-top', `${top}px`);
 					this.entriesContainer.style.setProperty('--line-height', `${height}px`);
+					
+					this.entryPopupMenu.classList.add('show');
+					this.entryPopupMenu.remove();
+					
+					span.insertAdjacentElement('beforebegin',this.entryPopupMenu);
+					this.isPopupMenuActive = true;
+
 				} else {
 					this.clearLineHighlighting();
 				}
@@ -325,13 +341,19 @@ export class UIManager {
 		});
 
 		this.entriesContainer.addEventListener('mouseleave', () => {
+			this.isPopupMenuActive = false;
 			this.clearLineHighlighting();
-		})
+		});
 	}
 
 	private clearLineHighlighting(): void {
-		this.entriesContainer.style.setProperty('--line-top', '0px');
-		this.entriesContainer.style.setProperty('--line-height', '0px');
+		if (!this.isPopupMenuActive) {
+			this.entriesContainer.style.setProperty('--line-top', '0px');
+			this.entriesContainer.style.setProperty('--line-height', '0px');
+
+			this.entryPopupMenu.classList.remove('show');
+			this.entryPopupMenu.remove();
+		}
 	}
 
 

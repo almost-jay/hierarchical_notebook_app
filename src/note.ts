@@ -108,7 +108,6 @@ export class Note {
 		// Write to filepath for both entries and persistent
 		const persistentFileName = `${this.id}-persistent`;
 		const entriesFileName = `${this.id}-entries`;
-		console.log(this.getOwnEntries());
 		const buffers: ArrayBuffer[] = this.getOwnEntries().map(e => e.toBinary());	
 		const totalLength = buffers.reduce((sum, buffer) => sum + buffer.byteLength, 0);
 
@@ -149,6 +148,7 @@ export class Note {
 			}
 		}
 		const newEntry = new Entry(this.entries.length, groupID, entryText, currentTime, indentLevel);
+		this.isEntriesUnsaved = true;
 		this.addEntry(newEntry);
 
 		return newEntry;
@@ -156,7 +156,6 @@ export class Note {
 
 	public addEntry(entry: Entry): void {
 		this.entries.push(entry);
-		this.isEntriesUnsaved = true;
 	}
 
 	public updateEntry(targetEntryId: number, newText: string): void {

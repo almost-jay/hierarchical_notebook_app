@@ -21,8 +21,7 @@ export class ToastManager {
 		document.body.appendChild(container);
 		this.container = container;
 
-		this.debug = true;
-		this.debug = true;
+		this.debug = true; // DEBUG
 	}
 
 	public show(type: string, message: string): void {

@@ -21,7 +21,6 @@ export class Overview extends Note {
 	}
 
 	public static async loadFromFile(): Promise<Overview> {
-		console.log('...are we eveb loading');
 		const entriesFileName: string = '.overview-entries';
 		
 		const newOverview = new Overview();
@@ -38,7 +37,6 @@ export class Overview extends Note {
 				newOverview.addEntry(newEntry)
 				i += 25 + textLength;
 			}
-			console.log(newOverview.entries);
 			return newOverview;
 		} else {
 			console.error(`Could not find entries file ${entriesFileName}!`);
@@ -57,8 +55,6 @@ export class Overview extends Note {
 		for (const entryWrapper of sortedEntries) {
 			const currentEntry = entryWrapper.entry;
 			const day = NoteUtils.formatDate(entryWrapper.entry.created);
-			console.log(day);
-			console.log(entryWrapper.entry.created);
 			if (!aggregatedEntries[day]) aggregatedEntries[day] = [];
 
 			let isNewGroup = false;
@@ -119,7 +115,6 @@ export class Overview extends Note {
 
 	public addEntry(newEntry: Entry): void {
 		this.overviewEntries.push(newEntry);
-		this.isEntriesUnsaved = true;
 	}
 
 	public isUnsaved(): boolean {
@@ -131,7 +126,6 @@ export class Overview extends Note {
 	}
 
 	public updateEntries(allEntries: EntryWithSource[]): void { // Collects all entries and parses them
-		console.log('running updateEntries()');
 		this.overviewEntries.forEach(entry => {
 			const newEntryWrapper: EntryWithSource = { entry: entry, sourcenoteID: this.id };
 			allEntries.push(newEntryWrapper); // Adds its own entries to the collated entry thing

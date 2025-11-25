@@ -2,6 +2,9 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fira+Sans+Condensed:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Overlock+SC&family=Overlock:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./src/styles.css" />
     <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0" />
     <title>notebook app</title>
@@ -45,12 +48,8 @@
 			</div>
 			<div id="log-container">
 				<div class="entry" id="entry-container">
-					<div class="entry-header">
-						<hr>
-						<span>00:00 2025-11-16</span>
-					</div>
 					<div class="entry-content">
-						<div class="entry-text">
+						<div class="entry-text"><span class="timestamp-inline">12:56</span>
 							<span class="disclosure-widget"></span><span>Note content here</span>
 							<div class="entry-text">
 								<span class="disclosure-widget"></span><span>Nested note content here</span>
@@ -61,6 +60,10 @@
 							<div class="entry-text"><span class="disclosure-widget"></span><span>A second line on the same level</span></div>
 						</div>
 						<div class="entry-text"><span class="disclosure-widget"></span><span>Another line on the main level</span></div>
+					</div>
+					<div class="entry-header">
+						<hr>
+						<span>00:00 2025-11-16</span>
 					</div>
 				</div>
 				<div class="log-input-container">

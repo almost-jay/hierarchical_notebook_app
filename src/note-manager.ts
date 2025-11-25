@@ -244,7 +244,7 @@ export class NoteManager {
 	}
 
 	public async saveMetadata(): Promise<void> {
-		const noteHeadings = Array.from(this.openNotes).join('\n') + '\n' + Array.from(this.unopenedNotes).join('\n') + '.overview';
+		const noteHeadings = Array.from(this.openNotes).join('\n') + '\n' + Array.from(this.unopenedNotes).join('\n') + '\n.overview';
 		await NoteUtils.writeMarkdownFile(this.userSettings.noteIndexFileName,noteHeadings);
 		await this.writeToCache();
 	}
@@ -307,6 +307,16 @@ export class NoteManager {
 		// this.writeToCache();
 		
 		return wasUnsaved != isUnsavedNow;
+	}
+
+	public editEntry(entryID: number): void {
+		const note = this.notes.get(this.activenoteID);
+		if (!note) return;
+
+		const targetEntry = note.getOwnEntries()[entryID];
+		if (!targetEntry) console.log ('fail to find entry: '+entryID); return;
+
+		
 	}
 
 	public getActivenoteID(): string {
@@ -389,6 +399,7 @@ export class NoteManager {
 	}
 
 	public async writeToCache(): Promise<void> {
+		console.log('writing to cache');
 		this.cachedData.currentnoteID = this.activenoteID;
 		this.cachedData.openNotes = this.openNotes;
 

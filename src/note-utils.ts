@@ -108,12 +108,21 @@ export class NoteUtils {
 	}
 
 	public static formatDateTime(date: Date): string {
-		const result = `${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')} ${date.getFullYear()}-${(date.getMonth()+1).toString().padStart(2,'0')}-${date.getDate().toString().padStart(2,'0')}`;
+		// const result = `${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')} 	// This is HH:MM YYYY-MM-DD format
+		// ${date.getFullYear()}-${(date.getMonth()+1).toString().padStart(2,'0')}-${date.getDate().toString().padStart(2,'0')}`;
+
+		const result = `${date.getDate().toString().padStart(2,'0')}/${(date.getMonth()+1).toString().padStart(2,'0')}/${date.getFullYear()},
+		${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')}`; // This is DD/MM/YYYY format
 		return result;
 
 	}
 
-	public static formatDate(date: Date): string {
+	public static formatTime(date: Date): string {
+		const result = `${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')}`;
+		return result;
+	}
+
+	public static formatDate(date: Date): string { // Can't just use .toISOString() because that isn't local time
 		const year = date.getFullYear();
 		const month = (date.getMonth() + 1).toString().padStart(2, '0');
 		const day = date.getDate().toString().padStart(2, '0');

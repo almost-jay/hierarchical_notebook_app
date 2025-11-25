@@ -13,8 +13,10 @@ export class UIManager {
 	private entryPopupMenu: HTMLDivElement;
 	private isPopupMenuActive: boolean = false;
 
+	private highlightedEntryID: number | null;
 	private currentIndentationLevel: number = 0;
 	private draggedTab: HTMLDivElement | null = null;
+
 	private noteSelector: NoteSelector;
 	private toastManager: ToastManager;
 	private noteManager: NoteManager;
@@ -36,6 +38,7 @@ export class UIManager {
 		this.noteSelector = new NoteSelector((noteID) => {
 			this.openNote(noteID);
 			this.selectNoteTab(noteID);
+			this.noteManager.writeToCache();
 		});
 
 		this.initialiseInput();
@@ -82,7 +85,7 @@ export class UIManager {
 		this.setupSidebarClickHandler();
 		this.setupTabDragging();
 		this.setupLogInput();
-		this.setupEntryHighlighting();
+		this.setupEntryInteraction();
 	}
 
 	private setupKeyboardShortcuts(): void {
@@ -287,36 +290,40 @@ export class UIManager {
 		this.updateSaveStateDisplay();
 	}
 
-	private setupEntryHighlighting(): void {
+	private setupEntryInteraction(): void {
 		this.entryPopupMenu.addEventListener('mouseover', () => {
 			this.isPopupMenuActive = true;
 		});
 		this.entryPopupMenu.addEventListener('mouseleave', () => {
 			this.isPopupMenuActive = false;
 		});
+
+		this.entryPopupMenu.addEventListener('click', (e) => {
+			if (!this.highlightedEntryID) return;
+
+			const target = e.target as HTMLElement;
+			if (target.tagName == 'BUTTON') {
+				
+				switch(target.textContent) {
+				case 'edit': // possibly evil and bad (should use id instead)
+					this.noteManager.editEntry(this.highlightedEntryID);
+					break;
+				}
+			}
+		});
+
 		this.entriesContainer.addEventListener('mouseover', (e) => {
 			const target = e.target as HTMLElement;
 			let span: HTMLSpanElement | null = null;
-			if (target.classList.contains('entry-text')) {
-				if (target.firstElementChild.tagName == 'SPAN') {
-					const firstSpan = target.firstElementChild as HTMLSpanElement;
-					if (target.children.length > 1) {
-						if (firstSpan.nextElementSibling.tagName == 'SPAN') {
-							span = firstSpan.nextElementSibling as HTMLSpanElement;
-						} else {
-							span = firstSpan;
-						}
-					} else {
-						span = firstSpan;
-					}
-				} else {
-					span = target.querySelector('span');
-				}
-			} else if (target.tagName == 'SPAN') {
-				span = target as HTMLSpanElement;
+			if (target.tagName == 'SPAN') {
+				span = target.parentElement.querySelector('.entry-text-content');
+			} else if (target.classList.contains('entry-content') || target.classList.contains('entry-text')) {
+				span = target.querySelector('.entry-text-content');
 			}
 			if (span) {
 				if (span.textContent) {
+					this.highlightedEntryID = parseInt(span.parentElement.dataset.entryID); // Possibly an evil and dangerous method
+
 					const rect = span.getBoundingClientRect();
 					const parentRect = this.entriesContainer.getBoundingClientRect();
 
@@ -347,12 +354,15 @@ export class UIManager {
 	}
 
 	private clearLineHighlighting(): void {
-		if (!this.isPopupMenuActive) {
+		if (!this.isPopupMenuActive && this.entryPopupMenu.parentElement) {
 			this.entriesContainer.style.setProperty('--line-top', '0px');
 			this.entriesContainer.style.setProperty('--line-height', '0px');
 
 			this.entryPopupMenu.classList.remove('show');
 			this.entryPopupMenu.remove();
+
+			this.highlightedEntryID = null;
+
 		}
 	}
 
@@ -416,6 +426,7 @@ export class UIManager {
 		try {
 			const activenoteID = this.noteManager.getActivenoteID();
 			this.closeNote(activenoteID);
+			this.noteManager.writeToCache();
 		} catch (err) {
 			this.toastManager.show('error','Error closing note: '+err);
 		}
@@ -521,100 +532,6 @@ export class UIManager {
 		this.updateSaveStateDisplay();
 	}
 
-	// private displayNewEntry(newEntry: Entry): void {
-	// 	if (!newEntry) return;
-
-	// 	let lastGroupDiv: HTMLDivElement | null = null;
-	// 	const existingGroups = Array.from(this.entriesContainer.querySelectorAll('.entry-content'));
-	// 	if (existingGroups.length > 0) {
-	// 		const lastGroup = existingGroups[existingGroups.length - 1] as HTMLDivElement;
-	// 		const lastGroupID = parseInt(lastGroup.dataset.groupID || '0');
-	// 		if (lastGroupID == newEntry.groupId) {
-	// 			lastGroupDiv = lastGroup as HTMLDivElement;
-	// 		}
-	// 	}
-
-	// 	let entryDiv: HTMLElement;
-	// 	if (lastGroupDiv) {
-	// 		entryDiv = lastGroupDiv;
-	// 	} else {
-	// 		entryDiv = document.createElement('div');
-	// 		entryDiv.classList.add('entry-content');
-
-	// 		const entryHeader = document.createElement('div');
-	// 		entryHeader.classList.add('entry-header');
-
-	// 		const headingBreak = document.createElement('hr');
-	// 		entryHeader.appendChild(headingBreak);
-
-	// 		const timestampSpan = document.createElement('span');
-	// 		timestampSpan.textContent = NoteUtils.formatDateTime(newEntry.created);
-	// 		entryHeader.appendChild(timestampSpan);
-
-	// 		entryDiv.appendChild(entryHeader);
-
-	// 		if (this.entriesContainer.childElementCount > 0) {
-	// 			this.entriesContainer.insertBefore(entryDiv,this.entriesContainer.firstElementChild);
-	// 		} else {
-	// 			this.entriesContainer.appendChild(entryDiv);
-	// 		}
-	// 	}
-
-	// 	const splitLines = newEntry.text.split('\n');
-	// 	let parents: HTMLDivElement[] = [];
-
-	// 	for (let i = 0; i < splitLines.length; i++) {
-	// 		const line = splitLines[i];
-	// 		const indentLevel = NoteUtils.countLeadingTabs(line, this.noteManager.userSettings.indentString);
-	// 		const text = NoteUtils.stripLeadingTabs(line, this.noteManager.userSettings.indentString);
-
-	// 		const entryTextDiv = document.createElement('div');
-	// 		entryTextDiv.classList.add('entry-text');
-
-	// 		let hasChildren = false;
-	// 		if (i < splitLines.length - 1) {
-	// 			const nextIndent = NoteUtils.countLeadingTabs(splitLines[i + 1], this.noteManager.userSettings.indentString);
-	// 			hasChildren = nextIndent > indentLevel;
-	// 		}
-
-	// 		if (hasChildren) {
-	// 			const disclosureWidget = document.createElement('span');
-	// 			disclosureWidget.classList.add('disclosure-widget');
-	// 			entryTextDiv.appendChild(disclosureWidget);
-	// 		}
-
-	// 		const entryTextSpan = document.createElement('span');
-	// 		entryTextSpan.textContent = text;
-	// 		entryTextDiv.appendChild(entryTextSpan);
-
-	// 		let parentContainer = entryDiv;
-	// 		for (let j = 0; j < indentLevel; j++) {
-	// 			if (!parents[j]) {
-	// 				const emptyDiv = document.createElement('div');
-	// 				emptyDiv.classList.add('entry-text');
-	// 				parentContainer.appendChild(emptyDiv);
-	// 				parents[j] = emptyDiv;
-	// 			}
-	// 			parentContainer = parents[j];
-	// 		}
-
-	// 		parentContainer.appendChild(entryTextDiv);
-	// 		parents = parents.slice(0, indentLevel);
-	// 		parents[indentLevel] = entryTextDiv;
-	// 	}
-	// }
-
-	// private displayCurrentEntries(): void {
-	// 	const entries = this.noteManager.getCurrentEntries();
-	// 	this.entriesContainer.innerHTML = '';
-		
-	// 	if (entries.length == 0) return;
-
-	// 	for (const entry of entries) {
-	// 		this.displayNewEntry(entry);
-	// 	}
-	// }
-
 	private displayCurrentEntries(): void {
 		const entries = this.noteManager.getCurrentEntries();
 		this.entriesContainer.innerHTML = '';
@@ -624,11 +541,15 @@ export class UIManager {
 			const groupStartEntry = entries[i];
 			const currentGroupId = groupStartEntry.groupId;
 
-			let textContent = groupStartEntry.text;
-			let nextIndex = i + 1;
+			const splitLines: [number, string][] = [];
+			let nextIndex = i;
 
 			while (nextIndex < entries.length && entries[nextIndex].groupId == currentGroupId) {
-				textContent += '\n' + entries[nextIndex].text;
+				const entry = entries[nextIndex];
+				const lines = entry.text.split('\n')
+				for (const line of lines) {
+					splitLines.push([nextIndex, line]);
+				}
 				nextIndex++;
 			}
 
@@ -640,7 +561,7 @@ export class UIManager {
 
 			const headingBreak = document.createElement('hr');
 			entryHeader.appendChild(headingBreak);
-
+			
 			const timestampSpan = document.createElement('span');
 			// TODO: Go through the entire group and get the most recently edited date, and use that
 			timestampSpan.textContent = NoteUtils.formatDateTime(entries[i].created); // TODO: Relative/contextual/fuzzy time
@@ -648,20 +569,22 @@ export class UIManager {
 
 			entryDiv.appendChild(entryHeader);
 
-			const splitLines = textContent.split('\n');
+			//const splitLines = textContent.split('\n');
 			let parents: HTMLDivElement[] = [];
 
-			for (let i = 0; i < splitLines.length; i++) {
-				const line = splitLines[i];
+			for (let j = 0; j < splitLines.length; j++) {
+				const index = splitLines[j][0];
+				const line = splitLines[j][1];
 				const indentLevel = NoteUtils.countLeadingTabs(line,this.noteManager.userSettings.indentString);
 				const text = NoteUtils.stripLeadingTabs(line,this.noteManager.userSettings.indentString);
 
 				const entryTextDiv = document.createElement('div');
 				entryTextDiv.classList.add('entry-text');
+				entryTextDiv.dataset.entryID = `${entries[index].id}`; // FIX
 
 				let hasChildren = false;
-				if (i < splitLines.length - 1) {
-					const nextIndent = NoteUtils.countLeadingTabs(splitLines[i + 1],this.noteManager.userSettings.indentString);
+				if (j < splitLines.length - 1) {
+					const nextIndent = NoteUtils.countLeadingTabs(splitLines[j + 1][1],this.noteManager.userSettings.indentString);
 					hasChildren = nextIndent > indentLevel;
 				}
 
@@ -671,19 +594,25 @@ export class UIManager {
 					entryTextDiv.appendChild(disclosureWidget);
 				}
 
+				const inlineTimestampSpan = document.createElement('div');
+				inlineTimestampSpan.classList.add('timestamp-inline');
+				inlineTimestampSpan.textContent = NoteUtils.formatTime(entries[index].created); // FIX
+				entryTextDiv.appendChild(inlineTimestampSpan);
+
 				const entryTextSpan = document.createElement('span');
+				entryTextSpan.classList.add('entry-text-content');
 				entryTextSpan.textContent = text;
 				entryTextDiv.appendChild(entryTextSpan);
 
 				let parentContainer = entryDiv;
-				for (let j = 0; j < indentLevel; j++) {
-					if (!parents[j]) {
+				for (let k = 0; k < indentLevel; k++) {
+					if (!parents[k]) {
 						const emptyDiv = document.createElement('div');
 						emptyDiv.classList.add('entry-text');
 						parentContainer.appendChild(emptyDiv);
-						parents[j] = emptyDiv;
+						parents[k] = emptyDiv;
 					}
-					parentContainer = parents[j];
+					parentContainer = parents[k];
 				}
 
 				parentContainer.appendChild(entryTextDiv);

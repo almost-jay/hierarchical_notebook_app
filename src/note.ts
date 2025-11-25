@@ -1,4 +1,4 @@
-import { Entry } from './entry';
+import { Entry, ENTRY_BINARY_FORMAT } from './entry';
 import { NoteUtils } from './note-utils';
 
 export class Note {
@@ -43,11 +43,12 @@ export class Note {
 				let i = 0;
 
 				while (i < entryFile.byteLength) {
-					const textLength = dataView.getUint16(i + 23);
-					const entryLength = i + 25 + textLength;
+					const textLength = dataView.getUint16(i + ENTRY_BINARY_FORMAT.TEXT_LENGTH_OFFSET);
+					const entryLength = i + ENTRY_BINARY_FORMAT.HEADER_SIZE + textLength;
 					const newEntry = Entry.fromBinary(entryFile.slice(i, entryLength));
 					newNote.addEntry(newEntry)
-					i += 25 + textLength;
+					i += ENTRY_BINARY_FORMAT.HEADER_SIZE + textLength;
+
 				}
 				newNote.isEntriesUnsaved = false;
 				return newNote;

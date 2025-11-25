@@ -1,4 +1,4 @@
-const ENTRY_BINARY_FORMAT  = {
+export const ENTRY_BINARY_FORMAT  = {
 	ID_OFFSET: 0,
 	GROUP_ID_OFFSET: 2,
 	QUOTED_ID_OFFSET: 4,
@@ -47,6 +47,7 @@ export class Entry {
 
 	public static fromBinary(file: ArrayBuffer): Entry {
 		const dataView = new DataView(file)
+
 		const id = dataView.getUint16(ENTRY_BINARY_FORMAT.ID_OFFSET);
 		const groupId = dataView.getUint16(ENTRY_BINARY_FORMAT.GROUP_ID_OFFSET);
 		const quotedId = dataView.getUint16(ENTRY_BINARY_FORMAT.QUOTED_ID_OFFSET);
@@ -64,7 +65,7 @@ export class Entry {
 		const textBytes = new TextEncoder().encode(this.text);
 		const textLength = textBytes.byteLength;
 		
-		const buffer = new ArrayBuffer(25 + textLength);
+		const buffer = new ArrayBuffer(ENTRY_BINARY_FORMAT.HEADER_SIZE + textLength);
 		const dataView = new DataView(buffer);
 
 		dataView.setUint16(ENTRY_BINARY_FORMAT.ID_OFFSET, this.id);

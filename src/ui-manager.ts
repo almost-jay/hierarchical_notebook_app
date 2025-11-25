@@ -1,3 +1,5 @@
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 import { NoteManager } from './note-manager';
 import { NoteSelector } from './note-selector';
 import { NoteUtils } from './note-utils';
@@ -32,6 +34,11 @@ export class UIManager {
 
 		this.noteTabsContainer.innerHTML = '';
 		this.entriesContainer.innerHTML = '';
+
+		marked.use({
+			async: false,
+			breaks: false,
+		})
 
 		this.noteManager = new NoteManager();
 		this.toastManager = new ToastManager(this.noteManager.userSettings.toastDuration);
@@ -618,7 +625,7 @@ export class UIManager {
 
 				const entryTextSpan = document.createElement('span');
 				entryTextSpan.classList.add('entry-text-content');
-				entryTextSpan.textContent = text;
+				entryTextSpan.innerHTML = DOMPurify.sanitize(marked.parseInline(text) as string);
 				entryTextDiv.appendChild(entryTextSpan);
 
 				let parentContainer = entryDiv;

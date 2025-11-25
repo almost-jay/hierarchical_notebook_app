@@ -275,6 +275,7 @@ div {
 	flex-direction: column;
 	resize: horizontal;
 	overflow: hidden;
+	flex-shrink: 0;
 }
 
 .note-heading {
@@ -558,22 +559,36 @@ div {
 
 .right-panel {
 	min-width: 0px;
-	background-color: var(--c-background-light);
+	background-color: var(--c-background-alt);
 	border: var(--border-thickness) solid var(--c-dim-alt);
 	flex-grow: 1;
 	flex-shrink: 1;
 }
 
 .big-note {
+	box-sizing: border-box;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+	padding: calc(calc(var(--logbox-min-height) / 2) - var(--line-height));
+	line-height: 25px;
+	padding-left: calc(2 * var(--spacing));
+	margin: var(--spacing);
+	font-family: var(--font);
+	font-size: var(--font-size);
+	color: var(--c-text);
 	min-width: 0px;
-	width: 100%;
-	height: 100%;
-	border: var(--border-thickness) solid var(--c-background-alt);
-	left: var(--spacing);
-	top: var(--spacing);
+	outline: none;
 	resize: none;
 	background-color: var(--c-background-alt);
 	border-radius: var(--corner-round);
+	overflow-y: auto;
+	align-self: stretch;
+}
+
+.big-note:empty::before {
+  content: attr(data-placeholder);
+  color: var(--c-dim-alt);
+  pointer-events: none;
 }
 
 .toast-container {

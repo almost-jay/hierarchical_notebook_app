@@ -1,220 +1,179 @@
-interface ParseOptions {
-  preserveSyntax?: boolean;
+export type NodeType =
+    | 'plain'
+    | 'italic'
+    | 'bold'
+    | 'bolditalic'
+    | 'underline'
+    | 'strikethrough'
+    | 'highlight'
+    | 'code'
+    | 'heading'
+    | 'blockquote';
+
+export interface ParsedNode {
+    type: NodeType;
+    text?: string;
+    level?: number;            // for heading or blockquote nesting
+    children?: ParsedNode[];
+    syntax?: string;
 }
 
-interface ParsedSegment {
-  text: string;
-  type: 'plain' | 'italic' | 'bold' | 'underline' | 'code' | 'strikethrough' | 'highlight' | 'heading' | 'blockquote';
-  syntax?: string;
-  level?: number;
+interface Frame {
+    type: NodeType;
+    marker: string;
+    start: number;
+    children: ParsedNode[];
+}
+
+interface MarkerDef {
+    marker: string;
+    type: Exclude<NodeType, 'heading' | 'blockquote'>;
 }
 
 export class MarkdownParser {
-	private preserveSyntax: boolean;
-
-	private INLINE_MARKERS: { marker: string; type: ParsedSegment['type'] }[] = [
-		{ marker: '**', type: 'bold' },
-		{ marker: '~~', type: 'strikethrough' },
-		{ marker: '==', type: 'highlight' },
-		{ marker: '*', type: 'italic' },
-		{ marker: '_', type: 'underline' },
-		{ marker: '`', type: 'code' },
+	private preserveSyntax: boolean = false;
+	private MARKERS: MarkerDef[] = [
+		{ marker: '***', type: 'bolditalic' },
+		{ marker: '==',  type: 'highlight' },
+		{ marker: '**',  type: 'bold' },
+		{ marker: '*',   type: 'italic' },
+		{ marker: '_',   type: 'underline' },
+		{ marker: '~~',  type: 'strikethrough' },
+		{ marker: '`',   type: 'code' },
 	];
-
-	public constructor(options: ParseOptions = {}) {
-		this.preserveSyntax = options.preserveSyntax ?? false;
+	public constructor(preserveSyntax?:boolean) {
+		this.preserveSyntax = preserveSyntax;
 	}
 
-	public parseLine(line: string): ParsedSegment[] {
-		const segments: ParsedSegment[] = [];
-
-		const headingMatch = line.match(/^(#{1,6})\s(.+)$/);
+	public parseLine(line: string): ParsedNode[] {
+		const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
 		if (headingMatch) {
 			const level = headingMatch[1].length;
-			segments.push({
-				text: headingMatch[2],
+			const content = headingMatch[2];
+			return [{
 				type: 'heading',
 				level,
-				syntax: this.preserveSyntax ? headingMatch[1] : undefined,
-			});
-			return segments;
+				children: this.parseInline(content),
+			}];
 		}
 
-		const blockquoteMatch = line.match(/^(>+)\s(.+)$/);
+		const blockquoteMatch = line.match(/^(>+)\s+(.*)$/);
 		if (blockquoteMatch) {
 			const level = blockquoteMatch[1].length;
-			segments.push({
-				text: blockquoteMatch[2],
+			const content = blockquoteMatch[2];
+			return [{
 				type: 'blockquote',
 				level,
-				syntax: this.preserveSyntax ? blockquoteMatch[1] : undefined,
-			});
-			return segments;
+				children: this.parseInline(content),
+			}];
 		}
 
-    type StackItem = { type: ParsedSegment['type']; marker: string; start: number };
-    const stack: StackItem[] = [];
-    let buffer = '';
-    let i = 0;
-
-    while (i < line.length) {
-    	let matchedMarker: { marker: string; type: ParsedSegment['type'] } | null = null;
-    	for (const m of this.INLINE_MARKERS) {
-    		if (line.slice(i, i + m.marker.length) === m.marker) {
-    			matchedMarker = m;
-    			break;
-    		}
-    	}
-
-    	if (matchedMarker) {
-    		const isEscaped = i > 0 && line[i - 1] === '\\';
-    		if (isEscaped) {
-    			buffer += matchedMarker.marker;
-    			i += matchedMarker.marker.length;
-    			continue;
-    		}
-
-    		const top = stack[stack.length - 1];
-
-    		if (top && top.marker === matchedMarker.marker) {
-    			const content = line.slice(top.start + matchedMarker.marker.length, i);
-    			const segment: ParsedSegment = { text: content, type: matchedMarker.type };
-    			if (this.preserveSyntax) {
-    				segment.syntax = line.slice(top.start, i + matchedMarker.marker.length);
-    			}
-    			segments.push(segment);
-
-    			stack.pop();
-    			i += matchedMarker.marker.length;
-    			buffer = '';
-    			continue;
-    		}
-
-    		if (buffer && stack.length === 0) {
-    			segments.push({ text: buffer, type: 'plain' });
-    			buffer = '';
-    		}
-
-    		stack.push({ type: matchedMarker.type, marker: matchedMarker.marker, start: i });
-    		i += matchedMarker.marker.length;
-    		continue;
-    	}
-
-    	buffer += line[i];
-    	i++;
-    }
-
-    if (buffer && stack.length === 0) {
-    	segments.push({ text: buffer, type: 'plain' });
-    	buffer = '';
-    }
-    while (stack.length > 0) {
-    	const unclosed = stack.pop()!;
-    	const segmentText = line.slice(unclosed.start);
-    	segments.push({
-    		text: this.preserveSyntax ? segmentText : segmentText.slice(unclosed.marker.length),
-    		type: 'plain',
-    	});
-    }
-
-    return segments;
+		return this.parseInline(line);
 	}
 
+	public parseInline(line: string): ParsedNode[] {
+		const root: Frame = { type: 'plain', marker: '', start: 0, children: [] };
+		const stack: Frame[] = [root];
+		let buffer = '';
+		let i = 0;
 
-	public parseText(text: string): ParsedSegment[][] {
-		return text.split('\n').map(line => this.parseLine(line));
-	}
+		const flushBuffer = (): void => {
+			if (buffer) {
+				stack[stack.length - 1].children.push({ type: 'plain', text: buffer });
+				buffer = '';
+			}
+		};
 
-	public renderHTML(parsed: ParsedSegment[][]): string {
-		const htmlLines = parsed.map(line => {
-			if (line.length === 1) {
-				const seg = line[0];
-				if (seg.type === 'heading' && seg.level) {
-					return `<h${seg.level}>${this.escapeHTML(seg.text)}</h${seg.level}>`;
-				}
-				if (seg.type === 'blockquote' && seg.level) {
-					let content = this.escapeHTML(seg.text);
-					for (let i = 0; i < seg.level; i++) {
-						content = `<blockquote>${content}</blockquote>`;
-					}
-					return content;
+		while (i < line.length) {
+			if (line[i] === '\\' && i + 1 < line.length) {
+				buffer += line[i + 1];
+				i += 2;
+				continue;
+			}
+
+			let matched: MarkerDef | null = null;
+			for (const m of this.MARKERS) {
+				if (line.startsWith(m.marker, i)) {
+					matched = m;
+					break;
 				}
 			}
 
-			return line.map(seg => this.renderInlineHTML(seg)).join('');
-		});
+			if (!matched) {
+				buffer += line[i];
+				i++;
+				continue;
+			}
 
-		return htmlLines.join('\n');
+			const { marker, type }: MarkerDef = matched;
+			const top = stack[stack.length - 1];
+
+			if (top.marker === marker) {
+				flushBuffer();
+				const frame = stack.pop()!;
+				const node: ParsedNode = {
+					type: frame.type,
+					children: frame.children,
+				};
+				if (this.preserveSyntax)
+					node.syntax = line.slice(frame.start, i + marker.length);
+				stack[stack.length - 1].children.push(node);
+				i += marker.length;
+				continue;
+			}
+
+			flushBuffer();
+			stack.push({ type, marker, start: i, children: [] });
+			i += marker.length;
+		}
+
+		flushBuffer();
+
+		while (stack.length > 1) {
+			const unclosed = stack.pop()!;
+			const text = line.slice(unclosed.start);
+			stack[stack.length - 1].children.push({
+				type: 'plain',
+				text: this.preserveSyntax ? text : text.slice(unclosed.marker.length),
+			});
+		}
+
+		return root.children;
 	}
 
-	private renderInlineHTML(seg: ParsedSegment): string {
-		const content = this.escapeHTML(seg.text);
-		console.log(content);
-		switch (seg.type) {
-		case 'italic': return `<em>${content}</em>`;
-		case 'bold': return `<strong>${content}</strong>`;
-		case 'underline': return `<u>${content}</u>`;
-		case 'strikethrough': return `<del>${content}</del>`;
-		case 'highlight': 
-			console.log(`highlight: <mark>${content}</mark>`);
-			return `<mark>${content}</mark>`;
-		case 'code': return `<code>${content}</code>`;
-		case 'plain': 
-			console.log(`plain: ${content}`);
-			return content;
-		case 'heading':
-		case 'blockquote':
-			console.log(`blockquote/heading: ${content}`);
-			return content;
-		default:
-			console.log(`default: ${content}`);
-			return content;
+	public renderHTML(nodes: ParsedNode[]): string {
+		return nodes.map(node => this.renderNode(node)).join('');
+	}
+
+	private renderNode(node: ParsedNode): string {
+		if (node.type === 'plain') return this.escapeHTML(node.text ?? '');
+
+		const inner = (node.children ?? []).map(c => this.renderNode(c)).join('');
+
+		switch (node.type) {
+		case 'italic':        return `<em>${inner}</em>`;
+		case 'bold':          return `<strong>${inner}</strong>`;
+		case 'bolditalic':    return `<strong><em>${inner}</em></strong>`;
+		case 'underline':     return `<u>${inner}</u>`;
+		case 'strikethrough': return `<del>${inner}</del>`;
+		case 'highlight':     return `<mark>${inner}</mark>`;
+		case 'code':          return `<code>${this.escapeHTML(inner)}</code>`;
+		case 'heading':       return `<h${node.level}>${inner}</h${node.level}>`;
+		case 'blockquote': {
+			let html = inner;
+			for (let i = 0; i < (node.level ?? 1); i++) {
+				html = `<blockquote>${html}</blockquote>`;
+			}
+			return html;
+		}
+		default: return inner;
 		}
 	}
 
 	private escapeHTML(text: string): string {
-		return text.replace(/[&<>"']/g, (m) => {
-			switch (m) {
-			case '&': return '&amp;';
-			case '<': return '&lt;';
-			case '>': return '&gt;';
-			case '"': return '&quot;';
-			case "'": return '&#39;';
-			default: return m;
-			}
-		});
+		return text
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;');
 	}
-
-	public renderLineHTML(line: string): string {
-		const segments = this.parseLine(line);
-
-		// Check if the line is a single heading or blockquote
-		if (segments.length === 1) {
-			const seg = segments[0];
-			if (seg.type === 'heading' && seg.level) {
-				return `<h${seg.level}>${this.escapeHTML(seg.text)}</h${seg.level}>`;
-			}
-			if (seg.type === 'blockquote' && seg.level) {
-				let content = this.escapeHTML(seg.text);
-				for (let i = 0; i < seg.level; i++) {
-					content = `<blockquote>${content}</blockquote>`;
-				}
-				return content;
-			}
-		}
-		console.log(segments);
-		let output = '';
-		console.log('output: '+output);
-		for (const seg of segments) {
-			console.log('Segment:',seg);
-			const rendered = this.renderInlineHTML(seg);
-			console.log('Rendered HTML: ',rendered);
-			output += rendered;
-			console.log('Current output: '+output);
-		}
-		console.log('Final: '+output);
-		return output;
-	}
-
-
 }

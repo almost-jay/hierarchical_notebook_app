@@ -1,5 +1,4 @@
-import { marked } from 'marked';
-import DOMPurify from 'dompurify';
+import { MarkdownParser } from './markdown-parser';
 import { NoteManager } from './note-manager';
 import { NoteSelector } from './note-selector';
 import { NoteUtils } from './note-utils';
@@ -9,36 +8,35 @@ export class UIManager {
 	private noteTabsContainer: HTMLDivElement;
 	private entriesContainer: HTMLDivElement;
 	private logInput: HTMLTextAreaElement;
-	private persistentTextInput: HTMLTextAreaElement;
+	private persistentTextInput: HTMLDivElement;
+	// private markdownTextPreview: HTMLDivElement;
 	private overviewDateSelector: HTMLInputElement;
 	private overviewDateRangeSelector: HTMLInputElement;
 	private entryPopupMenu: HTMLDivElement;
 	private isPopupMenuActive: boolean = false;
 
-	private highlightedEntryID: number | null;
+	private highlightedEntryID: number | null = null;
+	private currentlyEditedEntryID: null | number = null;
 	private currentIndentationLevel: number = 0;
-	private draggedTab: HTMLDivElement | null = null;
+	private draggedTab: HTMLDivElement | null = null; 
 
 	private noteSelector: NoteSelector;
 	private toastManager: ToastManager;
 	private noteManager: NoteManager;
+	private markdownParser: MarkdownParser;
+	private caretPosition: null | { start: number, end: number };
 
 	public constructor() {
 		this.noteTabsContainer = document.getElementById('note-tabs') as HTMLDivElement;
 		this.entriesContainer = document.getElementById('entry-container') as HTMLDivElement;
 		this.logInput = document.getElementById('log-input') as HTMLTextAreaElement;
-		this.persistentTextInput = document.getElementById('persistent-text-input') as HTMLTextAreaElement;
+		this.persistentTextInput = document.getElementById('persistent-text-input') as HTMLDivElement;
 		this.overviewDateSelector = document.getElementById('start-date-selector') as HTMLInputElement;
 		this.overviewDateRangeSelector = document.getElementById('date-range-selector') as HTMLInputElement;
 		this.entryPopupMenu = document.getElementById('popup-menu') as HTMLDivElement;
 
 		this.noteTabsContainer.innerHTML = '';
 		this.entriesContainer.innerHTML = '';
-
-		marked.use({
-			async: false,
-			breaks: false,
-		})
 
 		this.noteManager = new NoteManager();
 		this.toastManager = new ToastManager(this.noteManager.userSettings.toastDuration);
@@ -47,6 +45,7 @@ export class UIManager {
 			this.selectNoteTab(noteID);
 			this.noteManager.writeToCache();
 		});
+		this.markdownParser = new MarkdownParser();
 
 		this.initialiseInput();
 	}
@@ -82,7 +81,7 @@ export class UIManager {
 		this.setupOverviewDateSelectors();
 		const currentNoteID = this.noteManager.getActivenoteID();
 		this.selectNoteTab(currentNoteID);
-		this.renderPersistentText(currentNoteID);
+		this.renderPersistentText();
 		this.setCurrentNote(currentNoteID);
 	}
 
@@ -125,14 +124,146 @@ export class UIManager {
 	}
 
 	private setupPersistentTextHandlers(): void {
-		this.persistentTextInput.addEventListener('input', (_e) => {
+		this.persistentTextInput.addEventListener('input', (e: InputEvent) => {
 			if (this.draggedTab) return;
-			const saveStateChanged = this.noteManager.updatePersistentText(this.persistentTextInput.value);
+			const plainText = this.persistentTextInput.textContent;
+			// Also get line breaks somehow?? you can get them from the .innerHTML thing
+			// How did this work when it was a textarea...??
+			const saveStateChanged = this.noteManager.updatePersistentText(plainText);
 			if (saveStateChanged) {
 				this.updateSaveStateDisplay();
 			}
+			if (e.inputType == 'insertText') {
+				requestAnimationFrame(() => {
+					this.renderPersistentText();
+
+				});
+			} if (e.inputType == 'deleteContentBackward') {
+				if (plainText.length == 0) e.preventDefault();
+			}
+		});
+
+		this.persistentTextInput.addEventListener('beforeinput', (e: InputEvent) => {
+			if (this.draggedTab) return;
+
+			if (e.inputType == 'formatItalic') {
+				e.preventDefault();
+				this.insertAroundSelection('*',true);
+			} else if (e.inputType == 'formatBold') {
+				e.preventDefault();
+				this.insertAroundSelection('**',true);
+			} else if (e.inputType == 'formatUnderline') {
+				e.preventDefault();
+				this.insertAroundSelection('_',true);
+			} else if (e.inputType == 'formatStrikeThrough') {
+				e.preventDefault();
+				this.insertAroundSelection('~~',true);
+			}
 		});
 	}
+
+
+	private saveSelection(): void {
+		const selection = window.getSelection();
+		if (!selection || selection.rangeCount === 0) return null;
+
+		const range = selection.getRangeAt(0);
+
+		const preSelectionRange = range.cloneRange();
+		preSelectionRange.selectNodeContents(this.persistentTextInput);
+		preSelectionRange.setEnd(range.startContainer, range.startOffset);
+
+		const start = preSelectionRange.toString().length;
+
+		this.caretPosition = { start, end: start + range.toString().length };
+	}
+
+	private restoreSelection(): void {
+		if (!this.caretPosition) return;
+
+		let charIndex = 0;
+		const range = document.createRange();
+		range.setStart(this.persistentTextInput, 0);
+		range.collapse(true);
+
+		const nodeStack: Node[] = [this.persistentTextInput];
+		let node: Node | undefined;
+		let foundStart = false;
+		let stop = false;
+
+		while (!stop && (node = nodeStack.pop())) {
+			if (node.nodeType == Node.TEXT_NODE) {
+				const textNode = node as Text;
+				const nextCharIndex = charIndex + textNode.length;
+
+				if (!foundStart && this.caretPosition.start >= charIndex && this.caretPosition.start <= nextCharIndex) {
+					range.setStart(textNode, this.caretPosition.start - charIndex);
+					foundStart = true;
+				}
+				if (foundStart && this.caretPosition.end >= charIndex && this.caretPosition.end <= nextCharIndex) {
+					range.setEnd(textNode, this.caretPosition.end - charIndex);
+					stop = true;
+				}
+
+				charIndex = nextCharIndex;
+			} else {
+				let i = node.childNodes.length;
+				while (i--) nodeStack.push(node.childNodes[i]);
+			}
+		}
+
+		const selection = window.getSelection();
+		selection?.removeAllRanges();
+		selection?.addRange(range);
+	}
+
+	private getPersistentTextContent(): (string | '<br>')[][] {
+		const paragraphs: (string | '<br>')[][] = [];
+
+		let currentBuffer: (string | '<br>')[] = [];
+
+		function flushParagraph(): void {
+			if (currentBuffer.length > 0) {
+				paragraphs.push(currentBuffer);
+				currentBuffer = [];
+			}
+		}
+
+		function walk(node: Node): void {
+			if (node.nodeType === Node.TEXT_NODE) {
+				const text = node.textContent ?? '';
+				if (text.trim() !== '' || text.includes(' ')) {
+					currentBuffer.push(text);
+				}
+			}
+
+			else if (node.nodeType === Node.ELEMENT_NODE) {
+				const el = node as HTMLElement;
+
+				if (el.tagName === 'BR') {
+					currentBuffer.push('<br>');
+					return;
+				}
+
+				if (el.tagName === 'DIV' || el.tagName === 'P') {
+					flushParagraph();
+					el.childNodes.forEach(walk);
+					flushParagraph();
+					return;
+				}
+
+				el.childNodes.forEach(walk);
+			}
+		}
+
+		this.persistentTextInput.childNodes.forEach(walk);
+
+		flushParagraph();
+
+		return paragraphs;
+	}
+
+
 
 	private setupSidebarClickHandler(): void {
 		const sidebar = document.getElementById('sidebar') as HTMLFormElement;
@@ -291,10 +422,30 @@ export class UIManager {
 	}
 
 	private submitEntry(): void {
-		const _newEntry = this.noteManager.submitEntry(this.logInput.value, new Date());
-		this.logInput.value = '';
-		this.displayCurrentEntries();
-		this.updateSaveStateDisplay();
+		if (!this.currentlyEditedEntryID) {
+			const _newEntry = this.noteManager.submitEntry(this.logInput.value, new Date());
+			this.logInput.value = '';
+			this.displayCurrentEntries();
+			this.updateSaveStateDisplay();
+			this.updateLogInputHeight();
+		} else {
+			try {
+				this.noteManager.editEntry(this.currentlyEditedEntryID, this.logInput.value, new Date());
+
+				const entryTextElements = document.querySelectorAll(`.entry-text[data-entry-id="${this.currentlyEditedEntryID}"]`);
+				for (const element of entryTextElements) {
+					element.classList.remove('editing');
+				}
+
+				this.currentlyEditedEntryID = null;
+				this.logInput.value = '';
+				this.displayCurrentEntries();
+				this.updateSaveStateDisplay();
+				this.updateLogInputHeight();
+			} catch(err) {
+				this.toastManager.show('error','Error editing entry: '+err);
+			}
+		}
 	}
 
 	private setupEntryInteraction(): void {
@@ -312,8 +463,8 @@ export class UIManager {
 			if (target.tagName == 'BUTTON') {
 				
 				switch(target.textContent) {
-				case 'edit': // possibly evil and bad (should use id instead)
-					this.noteManager.editEntry(this.highlightedEntryID);
+				case 'edit': // possibly evil and bad (should use element id of each popup menu button instead)
+					this.editEntry(this.highlightedEntryID);
 					break;
 				case 'format_quote':
 					// quote/reply to entry
@@ -346,22 +497,41 @@ export class UIManager {
 			}
 			if (span) {
 				if (span.textContent) {
-					this.highlightedEntryID = parseInt(span.parentElement.dataset.entryID); // Possibly an evil and dangerous method
+					const inlineTimestampSpan = document.querySelector(`.timestamp-inline[data-entry-id="${this.highlightedEntryID}"]`);
+					if (inlineTimestampSpan) {
+						inlineTimestampSpan.classList.remove('show');
+					}
+					this.highlightedEntryID = parseInt(span.parentElement.dataset.entryId); // Possibly an evil and dangerous method
 
-					const rect = span.getBoundingClientRect();
-					const parentRect = this.entriesContainer.getBoundingClientRect();
+					const nodes = document.querySelectorAll(`.entry-text[data-entry-id="${this.highlightedEntryID}"]`);
+					const first = nodes[0] ?? null;
+					const last = nodes[nodes.length - 1] ?? null;
 
-					const margin = 8;
-					const top = rect.top - parentRect.top - (margin - 2);
-					const height = rect.height + (2 * margin);
-					this.entriesContainer.style.setProperty('--line-top', `${top}px`);
-					this.entriesContainer.style.setProperty('--line-height', `${height}px`);
-					
-					this.entryPopupMenu.classList.add('show');
-					this.entryPopupMenu.remove();
-					
-					span.insertAdjacentElement('beforebegin',this.entryPopupMenu);
-					this.isPopupMenuActive = true;
+					if (first && last) {
+						const firstRect = first.getBoundingClientRect();
+						const lastRect = last.getBoundingClientRect();
+						const parentRect = this.entriesContainer.getBoundingClientRect();
+
+						const margin = 8;
+						const top = firstRect.top - parentRect.top - (margin - 2);
+						const height = (lastRect.bottom - firstRect.top) + (2 * margin);
+						this.entriesContainer.style.setProperty('--line-top', `${top}px`);
+						this.entriesContainer.style.setProperty('--line-height', `${height}px`);
+						
+						this.entryPopupMenu.classList.add('show');
+						this.entryPopupMenu.remove();
+						
+						span.insertAdjacentElement('beforebegin',this.entryPopupMenu);
+						this.isPopupMenuActive = true;
+						
+						const inlineTimestampSpan = document.querySelector(`.timestamp-inline[data-entry-id="${this.highlightedEntryID}"]`);
+						if (inlineTimestampSpan) {
+							inlineTimestampSpan.classList.add('show');
+						}
+					} else {
+						console.log(nodes);
+						console.log('fail :(');
+					}
 
 				} else {
 					this.clearLineHighlighting();
@@ -377,8 +547,27 @@ export class UIManager {
 		});
 	}
 
+	private editEntry(entryID: number): void {
+		const entryText: string = this.noteManager.getEntryText(this.highlightedEntryID);
+		if (entryText) {
+			this.currentlyEditedEntryID = entryID;
+			this.logInput.value = entryText;
+			this.logInput.focus();
+
+			const entryTextElements = document.querySelectorAll(`.entry-text[data-entry-id="${entryID}"]`);
+			for (const element of entryTextElements) {
+				element.classList.add('editing');
+			}
+		}
+	}
+
 	private clearLineHighlighting(): void {
 		if (!this.isPopupMenuActive && this.entryPopupMenu.parentElement) {
+			const inlineTimestampSpan = document.querySelector(`.timestamp-inline[data-entry-id="${this.highlightedEntryID}"]`);
+			if (inlineTimestampSpan) {
+				inlineTimestampSpan.classList.remove('show');
+			}
+			
 			this.entriesContainer.style.setProperty('--line-top', '0px');
 			this.entriesContainer.style.setProperty('--line-height', '0px');
 
@@ -459,7 +648,7 @@ export class UIManager {
 	private async saveCurrentNote(): Promise<void> {
 		try {
 			const currentnoteID = this.noteManager.getActivenoteID();
-			if (currentnoteID != '.overview') this.noteManager.updatePersistentText(this.persistentTextInput.value);
+			if (currentnoteID != '.overview') this.noteManager.updatePersistentText(this.persistentTextInput.textContent);
 
 			const result = await this.noteManager.saveNote(currentnoteID);
 
@@ -486,7 +675,7 @@ export class UIManager {
 
 	private async saveAllNotes(): Promise<void> {
 		try {
-			this.noteManager.updatePersistentText(this.persistentTextInput.value);
+			this.noteManager.updatePersistentText(this.persistentTextInput.textContent);
 			let allSuccessful = true;
 			const results = await this.noteManager.saveAllNotes();
 			for (const result of results) {
@@ -519,7 +708,7 @@ export class UIManager {
 	}
 
 	private setCurrentNote(noteID: string): void {
-		this.noteManager.updatePersistentText(this.persistentTextInput.value);
+		this.noteManager.updatePersistentText(this.persistentTextInput.textContent);
 		const result = this.noteManager.changeCurrentNote(noteID);
 
 		if (!result) {
@@ -531,16 +720,16 @@ export class UIManager {
 		
 		if (noteID == '.overview') {
 			overviewControls.classList.add('show');
-			this.persistentTextInput.readOnly = true;
+			this.persistentTextInput.contentEditable = 'false';
 			this.refreshOverviewPage();
 			
 		} else {
 			overviewControls.classList.remove('show');
-			this.persistentTextInput.readOnly = false;
+			this.persistentTextInput.contentEditable = 'true';
 			this.logInput.disabled = false;
 		}
 
-		this.renderPersistentText(noteID);
+		this.renderPersistentText();
 		this.updateSaveStateDisplay();
 		this.displayCurrentEntries();
 	}
@@ -565,12 +754,23 @@ export class UIManager {
 			const groupStartEntry = entries[i];
 			const currentGroupId = groupStartEntry.groupId;
 
+			let lastEdited: Date | null = null;
 			const splitLines: [number, string][] = [];
 			let nextIndex = i;
-
+			
 			while (nextIndex < entries.length && entries[nextIndex].groupId == currentGroupId) {
 				const entry = entries[nextIndex];
-				const lines = entry.text.split('\n')
+
+				if (entry.lastEdited) {
+					if (!lastEdited) {
+						lastEdited = entry.lastEdited;
+					} else if (entry.lastEdited > lastEdited) {
+						lastEdited = entry.lastEdited;
+					}
+				}
+
+				const nodes = this.markdownParser.parseLine(entry.text, false);
+				const lines = this.markdownParser.renderHTML(nodes, false).split('\n');
 				for (const line of lines) {
 					splitLines.push([nextIndex, line]);
 				}
@@ -588,7 +788,10 @@ export class UIManager {
 			
 			const timestampSpan = document.createElement('span');
 			// TODO: Go through the entire group and get the most recently edited date, and use that
-			timestampSpan.textContent = NoteUtils.getRelativeTime(entries[i].created); // TODO: Relative/contextual/fuzzy time
+			
+			let timestampContent = NoteUtils.getRelativeTime(entries[i].created);
+			if (lastEdited) timestampContent = 'Edited '+(NoteUtils.getRelativeTime(lastEdited).toLowerCase());
+			timestampSpan.textContent = timestampContent;
 			entryHeader.appendChild(timestampSpan);
 
 			entryDiv.appendChild(entryHeader);
@@ -604,8 +807,7 @@ export class UIManager {
 
 				const entryTextDiv = document.createElement('div');
 				entryTextDiv.classList.add('entry-text');
-				entryTextDiv.dataset.entryID = `${entries[index].id}`; // FIX
-
+				entryTextDiv.dataset.entryId = `${entries[index].id}`;
 				let hasChildren = false;
 				if (j < splitLines.length - 1) {
 					const nextIndent = NoteUtils.countLeadingTabs(splitLines[j + 1][1],this.noteManager.userSettings.indentString);
@@ -618,14 +820,19 @@ export class UIManager {
 					entryTextDiv.appendChild(disclosureWidget);
 				}
 
-				const inlineTimestampSpan = document.createElement('div');
-				inlineTimestampSpan.classList.add('timestamp-inline');
-				inlineTimestampSpan.textContent = NoteUtils.formatTime(entries[index].created); // FIX
-				entryTextDiv.appendChild(inlineTimestampSpan);
+				if (j == 0 || index > splitLines[j - 1][0]){
+					const inlineTimestampSpan = document.createElement('div');
+					inlineTimestampSpan.classList.add('timestamp-inline');
+					inlineTimestampSpan.textContent = NoteUtils.formatTime(entries[index].created);
+					inlineTimestampSpan.dataset.entryId = `${entries[index].id}`;
+					entryTextDiv.appendChild(inlineTimestampSpan);
+				}
 
 				const entryTextSpan = document.createElement('span');
 				entryTextSpan.classList.add('entry-text-content');
-				entryTextSpan.innerHTML = DOMPurify.sanitize(marked.parseInline(text) as string);
+				// PARSE INLINE HERE
+
+				entryTextSpan.innerHTML = text;
 				entryTextDiv.appendChild(entryTextSpan);
 
 				let parentContainer = entryDiv;
@@ -654,12 +861,62 @@ export class UIManager {
 		}
 	}
 
-	private renderPersistentText(noteID: string): void {
-		const textContent = this.noteManager.getPersistentText(noteID);
-		this.persistentTextInput.value = textContent;
+	private renderPersistentText(): void {
+		const textContent = this.getPersistentTextContent();
+		const selection = window.getSelection();
+
+		if (!selection) return;
+
+		this.saveSelection();
+
+		this.persistentTextInput.innerHTML = '';
+
+		for (const paragraph of textContent) {
+			for (const line of paragraph) {
+				const parsed = this.markdownParser.parseLine(line, true);
+				this.persistentTextInput.innerHTML += this.markdownParser.renderHTML(parsed, true);
+			}
+		}
+		this.restoreSelection();
 	}
 
-	private updateSaveStateDisplay(noteID?: string): void { // If no noteID is given, defaults to the active note.
+	private insertAroundSelection(char: string, bothSides: boolean): void {
+		const sel = window.getSelection();
+		if (!sel || !sel.rangeCount) return;
+
+		const range = sel.getRangeAt(0);
+		const fragment = range.extractContents(); // preserves all HTML
+
+		const wrapper = document.createElement('span');
+
+		if (bothSides) {
+			wrapper.appendChild(document.createTextNode(char));
+		}
+
+		wrapper.appendChild(fragment);
+
+		if (bothSides) {
+			wrapper.appendChild(document.createTextNode(char));
+		}
+
+		range.insertNode(wrapper);
+
+		sel.removeAllRanges();
+		const newRange = document.createRange();
+
+		if (fragment.childNodes.length === 0) {
+			newRange.setStart(wrapper.firstChild!, 1);
+		} else {
+			newRange.setStartAfter(wrapper);
+		}
+
+		newRange.collapse(true);
+		sel.addRange(newRange);
+	}
+
+
+
+	private updateSaveStateDisplay(noteID?: string): void {
 		const noteData = this.noteManager.getNoteData(noteID);
 		if (!noteData) return; //TODO
 

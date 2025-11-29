@@ -8,3 +8,9 @@ Too lazy to learn how to use QT/GDK frameworks, so Tauri + TypeScript until I ca
 
 * Run with `npm run tauri dev`
 * If it complains, try `cargo clean --manifest-path src-tauri/Cargo.toml` first
+
+Screenshots from 28/11/25:
+
+![Entry view with inline images](images/Screenshot_20251128_223233.png)
+
+![Overview page with markdown formatting](images/Screenshot_20251128_223338.png)

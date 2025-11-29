@@ -44,6 +44,10 @@
 				<div class="note-controls">
 					<button class="material-symbols">pinboard</button>
 					<input class="search-box" type="text" placeholder="Search...">
+					<label class="switch" title="Toggle markdown rendering">
+						<input type="checkbox" id="entries-markdown-toggle" checked>
+						<span class="slider"></span>
+					</label>
 				</div>
 			</div>
 			<div id="log-container">
@@ -67,16 +71,17 @@
 					</div>
 				</div>
 				<div class="log-input-container">
-					<button class="material-symbols">attach_file</button>
+					<button class="material-symbols" id="attach-file-button">attach_file</button>
 					<textarea id="log-input" placeholder="Add to log..."></textarea>
 					<button class="material-symbols" id="submit-entry-button">send</button>
 				</div>
 			</div>
 		</div>
 
-		<div class="right-panel">
-			<!-- <textarea class="big-note" id="persistent-text-input" placeholder="Permanent note content..."></textarea> -->
-			 <div class="big-note" id="persistent-text-input" contenteditable="true" data-placeholder="Permanent note content..."></div>
+		<div class="right-panel" id="right-panel">
+			<textarea class="big-note" id="persistent-text-input" placeholder="Permanent note content..."></textarea>
+			 <!-- <div class="big-note" id="markdown-preview"></div> -->
+			 <!-- <div class="big-note" id="persistent-text-input" contenteditable="true" data-placeholder="Permanent note content..."></div> -->
 		</div>
 	</div>
 
@@ -103,6 +108,5 @@
 		<button class="material-symbols" title="Pin entry">keep</button>
 		<button class="material-symbols delete-icon" title="Delete entry">delete</button>
 	</div>
-
   </body>
 </html>

@@ -81,4 +81,9 @@ export class Entry {
 		
 		return buffer;
 	}
+
+	public modifyEntry(newText: string, editTime: Date): void {
+		this.text = newText;
+		this.lastEdited = editTime;
+	}
 }

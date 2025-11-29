@@ -9,10 +9,11 @@
     "core:default",
     "opener:default",
     "fs:allow-exists",
-    "fs:allow-appdata-read",
-    "fs:allow-appdata-write",
+    "fs:allow-appdata-read-recursive",
+    "fs:allow-appdata-write-recursive",
     "fs:allow-appconfig-read",
     "fs:allow-appcache-read",
-    "fs:allow-appcache-write"
+    "fs:allow-appcache-write",
+    "dialog:default"
   ]
 }

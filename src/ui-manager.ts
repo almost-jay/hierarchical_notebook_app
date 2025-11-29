@@ -1,36 +1,40 @@
+import { open } from '@tauri-apps/plugin-dialog';
+
 import { MarkdownParser } from './markdown-parser';
 import { NoteManager } from './note-manager';
 import { NoteSelector } from './note-selector';
 import { NoteUtils } from './note-utils';
 import { ToastManager } from './toast-manager';
+import { appLocalDataDir } from '@tauri-apps/api/path';
 
 export class UIManager {
 	private noteTabsContainer: HTMLDivElement;
 	private entriesContainer: HTMLDivElement;
 	private logInput: HTMLTextAreaElement;
-	private persistentTextInput: HTMLDivElement;
-	// private markdownTextPreview: HTMLDivElement;
+	private persistentTextInput: HTMLTextAreaElement;
 	private overviewDateSelector: HTMLInputElement;
 	private overviewDateRangeSelector: HTMLInputElement;
 	private entryPopupMenu: HTMLDivElement;
 	private isPopupMenuActive: boolean = false;
+	private renderEntryMarkdown: boolean = true;
 
 	private highlightedEntryID: number | null = null;
 	private currentlyEditedEntryID: null | number = null;
 	private currentIndentationLevel: number = 0;
 	private draggedTab: HTMLDivElement | null = null; 
 
+	private imageDirectory: string;
+
 	private noteSelector: NoteSelector;
 	private toastManager: ToastManager;
 	private noteManager: NoteManager;
 	private markdownParser: MarkdownParser;
-	private caretPosition: null | { start: number, end: number };
 
 	public constructor() {
 		this.noteTabsContainer = document.getElementById('note-tabs') as HTMLDivElement;
 		this.entriesContainer = document.getElementById('entry-container') as HTMLDivElement;
 		this.logInput = document.getElementById('log-input') as HTMLTextAreaElement;
-		this.persistentTextInput = document.getElementById('persistent-text-input') as HTMLDivElement;
+		this.persistentTextInput = document.getElementById('persistent-text-input') as HTMLTextAreaElement;
 		this.overviewDateSelector = document.getElementById('start-date-selector') as HTMLInputElement;
 		this.overviewDateRangeSelector = document.getElementById('date-range-selector') as HTMLInputElement;
 		this.entryPopupMenu = document.getElementById('popup-menu') as HTMLDivElement;
@@ -46,15 +50,24 @@ export class UIManager {
 			this.noteManager.writeToCache();
 		});
 		this.markdownParser = new MarkdownParser();
+		
 
 		this.initialiseInput();
 	}
 	
 	public async initialiseAsync(): Promise<void> {
+		this.imageDirectory = await appLocalDataDir() + '/images/';
+
 		try {
 			await this.noteManager.loadUserSettings();
 		} catch (err) {
-			this.toastManager.show('error','Error loading notes: '+err);
+			this.toastManager.show('error','Error loading config file: '+err);
+		}
+
+		try {
+			await this.noteManager.loadImageData();
+		} catch (err) {
+			this.toastManager.show('error','Error loading image data: '+err);
 		}
 
 		let result = [];
@@ -79,9 +92,8 @@ export class UIManager {
 		}
 		
 		this.setupOverviewDateSelectors();
-		const currentNoteID = this.noteManager.getActivenoteID();
+		const currentNoteID = this.noteManager.getActiveNoteID();
 		this.selectNoteTab(currentNoteID);
-		this.renderPersistentText();
 		this.setCurrentNote(currentNoteID);
 	}
 
@@ -91,6 +103,7 @@ export class UIManager {
 		this.setupSidebarClickHandler();
 		this.setupTabDragging();
 		this.setupLogInput();
+		this.setupFileInput();
 		this.setupEntryInteraction();
 	}
 
@@ -124,145 +137,37 @@ export class UIManager {
 	}
 
 	private setupPersistentTextHandlers(): void {
-		this.persistentTextInput.addEventListener('input', (e: InputEvent) => {
+		document.getElementById('right-panel').addEventListener('click', () => {
+			this.persistentTextInput.focus();
+		});
+
+		this.persistentTextInput.addEventListener('keydown', (e: KeyboardEvent) => {
+			if (e.ctrlKey && e.key.toLowerCase() == 'z') {
+				this.noteManager.undo();
+				this.persistentTextInput.value = this.noteManager.getPersistentText();
+				this.persistentTextInput.focus();
+
+				e.preventDefault();
+			}
+			if (e.ctrlKey && e.key.toLowerCase() == 'y') {
+				this.noteManager.redo();
+				this.persistentTextInput.value = this.noteManager.getPersistentText();
+				this.persistentTextInput.focus();
+
+				e.preventDefault();
+			}
+		});
+
+		this.persistentTextInput.addEventListener('input', () => {
 			if (this.draggedTab) return;
-			const plainText = this.persistentTextInput.textContent;
-			// Also get line breaks somehow?? you can get them from the .innerHTML thing
-			// How did this work when it was a textarea...??
+			const plainText = this.persistentTextInput.value;
+
 			const saveStateChanged = this.noteManager.updatePersistentText(plainText);
 			if (saveStateChanged) {
 				this.updateSaveStateDisplay();
 			}
-			if (e.inputType == 'insertText') {
-				requestAnimationFrame(() => {
-					this.renderPersistentText();
-
-				});
-			} if (e.inputType == 'deleteContentBackward') {
-				if (plainText.length == 0) e.preventDefault();
-			}
-		});
-
-		this.persistentTextInput.addEventListener('beforeinput', (e: InputEvent) => {
-			if (this.draggedTab) return;
-
-			if (e.inputType == 'formatItalic') {
-				e.preventDefault();
-				this.insertAroundSelection('*',true);
-			} else if (e.inputType == 'formatBold') {
-				e.preventDefault();
-				this.insertAroundSelection('**',true);
-			} else if (e.inputType == 'formatUnderline') {
-				e.preventDefault();
-				this.insertAroundSelection('_',true);
-			} else if (e.inputType == 'formatStrikeThrough') {
-				e.preventDefault();
-				this.insertAroundSelection('~~',true);
-			}
-		});
+		})
 	}
-
-
-	private saveSelection(): void {
-		const selection = window.getSelection();
-		if (!selection || selection.rangeCount === 0) return null;
-
-		const range = selection.getRangeAt(0);
-
-		const preSelectionRange = range.cloneRange();
-		preSelectionRange.selectNodeContents(this.persistentTextInput);
-		preSelectionRange.setEnd(range.startContainer, range.startOffset);
-
-		const start = preSelectionRange.toString().length;
-
-		this.caretPosition = { start, end: start + range.toString().length };
-	}
-
-	private restoreSelection(): void {
-		if (!this.caretPosition) return;
-
-		let charIndex = 0;
-		const range = document.createRange();
-		range.setStart(this.persistentTextInput, 0);
-		range.collapse(true);
-
-		const nodeStack: Node[] = [this.persistentTextInput];
-		let node: Node | undefined;
-		let foundStart = false;
-		let stop = false;
-
-		while (!stop && (node = nodeStack.pop())) {
-			if (node.nodeType == Node.TEXT_NODE) {
-				const textNode = node as Text;
-				const nextCharIndex = charIndex + textNode.length;
-
-				if (!foundStart && this.caretPosition.start >= charIndex && this.caretPosition.start <= nextCharIndex) {
-					range.setStart(textNode, this.caretPosition.start - charIndex);
-					foundStart = true;
-				}
-				if (foundStart && this.caretPosition.end >= charIndex && this.caretPosition.end <= nextCharIndex) {
-					range.setEnd(textNode, this.caretPosition.end - charIndex);
-					stop = true;
-				}
-
-				charIndex = nextCharIndex;
-			} else {
-				let i = node.childNodes.length;
-				while (i--) nodeStack.push(node.childNodes[i]);
-			}
-		}
-
-		const selection = window.getSelection();
-		selection?.removeAllRanges();
-		selection?.addRange(range);
-	}
-
-	private getPersistentTextContent(): (string | '<br>')[][] {
-		const paragraphs: (string | '<br>')[][] = [];
-
-		let currentBuffer: (string | '<br>')[] = [];
-
-		function flushParagraph(): void {
-			if (currentBuffer.length > 0) {
-				paragraphs.push(currentBuffer);
-				currentBuffer = [];
-			}
-		}
-
-		function walk(node: Node): void {
-			if (node.nodeType === Node.TEXT_NODE) {
-				const text = node.textContent ?? '';
-				if (text.trim() !== '' || text.includes(' ')) {
-					currentBuffer.push(text);
-				}
-			}
-
-			else if (node.nodeType === Node.ELEMENT_NODE) {
-				const el = node as HTMLElement;
-
-				if (el.tagName === 'BR') {
-					currentBuffer.push('<br>');
-					return;
-				}
-
-				if (el.tagName === 'DIV' || el.tagName === 'P') {
-					flushParagraph();
-					el.childNodes.forEach(walk);
-					flushParagraph();
-					return;
-				}
-
-				el.childNodes.forEach(walk);
-			}
-		}
-
-		this.persistentTextInput.childNodes.forEach(walk);
-
-		flushParagraph();
-
-		return paragraphs;
-	}
-
 
 
 	private setupSidebarClickHandler(): void {
@@ -361,7 +266,7 @@ export class UIManager {
 		});
 	}
 
-	private refreshOverviewPage(): void {
+	private async refreshOverviewPage(): Promise<void> {
 		this.noteManager.updateOverview();
 		const overviewDayPrev = document.getElementById('day-prev') as HTMLButtonElement;
 		const overviewDayNext = document.getElementById('day-next') as HTMLButtonElement;
@@ -422,33 +327,65 @@ export class UIManager {
 	}
 
 	private submitEntry(): void {
-		if (!this.currentlyEditedEntryID) {
-			const _newEntry = this.noteManager.submitEntry(this.logInput.value, new Date());
-			this.logInput.value = '';
-			this.displayCurrentEntries();
-			this.updateSaveStateDisplay();
-			this.updateLogInputHeight();
+		if (this.currentlyEditedEntryID == null) {
+			if (this.logInput.value.length > 0) {
+				this.noteManager.submitEntry(this.logInput.value, new Date()); // passes back an entry
+				this.logInput.value = '';
+				this.displayCurrentEntries();
+				this.updateSaveStateDisplay();
+				this.updateLogInputHeight();
+			}
 		} else {
 			try {
-				this.noteManager.editEntry(this.currentlyEditedEntryID, this.logInput.value, new Date());
+				const editedNoteID = this.noteManager.editEntry(this.currentlyEditedEntryID, this.logInput.value, new Date());
 
 				const entryTextElements = document.querySelectorAll(`.entry-text[data-entry-id="${this.currentlyEditedEntryID}"]`);
 				for (const element of entryTextElements) {
 					element.classList.remove('editing');
 				}
 
+				if (editedNoteID == '.overview') {
+					this.refreshOverviewPage();
+				}
+
 				this.currentlyEditedEntryID = null;
 				this.logInput.value = '';
 				this.displayCurrentEntries();
-				this.updateSaveStateDisplay();
+				this.updateSaveStateDisplay(editedNoteID);
 				this.updateLogInputHeight();
+
+				this.noteManager.writeToCache();
 			} catch(err) {
 				this.toastManager.show('error','Error editing entry: '+err);
 			}
 		}
 	}
 
+	private setupFileInput(): void {
+		const attachFileButton = document.getElementById('attach-file-button');
+		attachFileButton.addEventListener('click', async () => {
+			const files = await open({
+				multiple: true,
+				directory: false,
+			});
+			
+			if (!files) return;
+
+			for (let i = 0; i < files.length; i++) {
+				const file = files[i];
+				this.logInput.value += `![image ${i}](${file})`;
+				this.noteManager.storeImage(file); // TODO: Delete unused images
+			}
+		});
+	}
+
 	private setupEntryInteraction(): void {
+		const entriesMarkdownToggle = document.getElementById('entries-markdown-toggle') as HTMLInputElement;
+		entriesMarkdownToggle.addEventListener('change', () => {
+			this.renderEntryMarkdown = entriesMarkdownToggle.checked;
+			this.displayCurrentEntries();
+		})
+
 		this.entryPopupMenu.addEventListener('mouseover', () => {
 			this.isPopupMenuActive = true;
 		});
@@ -457,11 +394,9 @@ export class UIManager {
 		});
 
 		this.entryPopupMenu.addEventListener('click', (e) => {
-			if (!this.highlightedEntryID) return;
-
+			if (this.highlightedEntryID == null) return;
 			const target = e.target as HTMLElement;
 			if (target.tagName == 'BUTTON') {
-				
 				switch(target.textContent) {
 				case 'edit': // possibly evil and bad (should use element id of each popup menu button instead)
 					this.editEntry(this.highlightedEntryID);
@@ -479,7 +414,7 @@ export class UIManager {
 					// unpin entry
 					break;
 				case 'delete':
-					// delete entry
+					this.deleteEntry(this.highlightedEntryID);
 					break;
 				}
 			}
@@ -496,7 +431,9 @@ export class UIManager {
 				span = target.querySelector('.entry-text-content');
 			}
 			if (span) {
-				if (span.textContent) {
+				let isImageChild = false;
+				if (span.firstElementChild) if (span.firstElementChild.tagName == 'IMG') isImageChild = true;
+				if (span.textContent || isImageChild) {
 					const inlineTimestampSpan = document.querySelector(`.timestamp-inline[data-entry-id="${this.highlightedEntryID}"]`);
 					if (inlineTimestampSpan) {
 						inlineTimestampSpan.classList.remove('show');
@@ -518,19 +455,18 @@ export class UIManager {
 						this.entriesContainer.style.setProperty('--line-top', `${top}px`);
 						this.entriesContainer.style.setProperty('--line-height', `${height}px`);
 						
+						//if (this.noteManager.getActiveNoteID() != '.overview') {
 						this.entryPopupMenu.classList.add('show');
 						this.entryPopupMenu.remove();
 						
 						span.insertAdjacentElement('beforebegin',this.entryPopupMenu);
 						this.isPopupMenuActive = true;
+						//}
 						
 						const inlineTimestampSpan = document.querySelector(`.timestamp-inline[data-entry-id="${this.highlightedEntryID}"]`);
 						if (inlineTimestampSpan) {
 							inlineTimestampSpan.classList.add('show');
 						}
-					} else {
-						console.log(nodes);
-						console.log('fail :(');
 					}
 
 				} else {
@@ -548,10 +484,13 @@ export class UIManager {
 	}
 
 	private editEntry(entryID: number): void {
+		console.log('editing pass 1');
 		const entryText: string = this.noteManager.getEntryText(this.highlightedEntryID);
 		if (entryText) {
 			this.currentlyEditedEntryID = entryID;
+			this.logInput.disabled = false;
 			this.logInput.value = entryText;
+			this.updateLogInputHeight();
 			this.logInput.focus();
 
 			const entryTextElements = document.querySelectorAll(`.entry-text[data-entry-id="${entryID}"]`);
@@ -559,6 +498,21 @@ export class UIManager {
 				element.classList.add('editing');
 			}
 		}
+	}
+
+	private deleteEntry(entryID: number): void {
+		try {
+			const affectedNote = this.noteManager.deleteEntry(entryID);
+
+			if (affectedNote) {
+				this.updateSaveStateDisplay(affectedNote);
+				this.displayCurrentEntries();
+				this.noteManager.writeToCache();
+			}
+		} catch(err) {
+			this.toastManager.show('error','Error while deleting entry: '+err);
+		}
+		
 	}
 
 	private clearLineHighlighting(): void {
@@ -637,7 +591,7 @@ export class UIManager {
 
 	private closeCurrentNote(): void {
 		try {
-			const activenoteID = this.noteManager.getActivenoteID();
+			const activenoteID = this.noteManager.getActiveNoteID();
 			this.closeNote(activenoteID);
 			this.noteManager.writeToCache();
 		} catch (err) {
@@ -647,7 +601,7 @@ export class UIManager {
 
 	private async saveCurrentNote(): Promise<void> {
 		try {
-			const currentnoteID = this.noteManager.getActivenoteID();
+			const currentnoteID = this.noteManager.getActiveNoteID();
 			if (currentnoteID != '.overview') this.noteManager.updatePersistentText(this.persistentTextInput.textContent);
 
 			const result = await this.noteManager.saveNote(currentnoteID);
@@ -674,6 +628,7 @@ export class UIManager {
 	}
 
 	private async saveAllNotes(): Promise<void> {
+		if (!this.noteManager.isAnythingUnsaved()) return;
 		try {
 			this.noteManager.updatePersistentText(this.persistentTextInput.textContent);
 			let allSuccessful = true;
@@ -720,18 +675,17 @@ export class UIManager {
 		
 		if (noteID == '.overview') {
 			overviewControls.classList.add('show');
-			this.persistentTextInput.contentEditable = 'false';
+			
 			this.refreshOverviewPage();
 			
 		} else {
 			overviewControls.classList.remove('show');
-			this.persistentTextInput.contentEditable = 'true';
 			this.logInput.disabled = false;
 		}
 
-		this.renderPersistentText();
 		this.updateSaveStateDisplay();
 		this.displayCurrentEntries();
+		this.noteManager.writeToCache();
 	}
 
 	private updateNoteTabsID(oldId: string, newId: string, newTitle: string): void {
@@ -768,11 +722,17 @@ export class UIManager {
 						lastEdited = entry.lastEdited;
 					}
 				}
-
-				const nodes = this.markdownParser.parseLine(entry.text, false);
-				const lines = this.markdownParser.renderHTML(nodes, false).split('\n');
-				for (const line of lines) {
-					splitLines.push([nextIndex, line]);
+				
+				if (this.renderEntryMarkdown) {
+					const nodes = this.markdownParser.parseLine(entry.text);
+					const lines = this.markdownParser.renderHTML(nodes).split('\n');
+					for (const line of lines) {
+						splitLines.push([nextIndex, line]);
+					}
+				} else { // CHECK
+					for (const line of entry.text.split('\n')) {
+						splitLines.push([nextIndex, line]);
+					}
 				}
 				nextIndex++;
 			}
@@ -830,7 +790,7 @@ export class UIManager {
 
 				const entryTextSpan = document.createElement('span');
 				entryTextSpan.classList.add('entry-text-content');
-				// PARSE INLINE HERE
+				// PARSE INLINE HERE?
 
 				entryTextSpan.innerHTML = text;
 				entryTextDiv.appendChild(entryTextSpan);
@@ -859,73 +819,31 @@ export class UIManager {
 
 			i = nextIndex - 1;
 		}
-	}
 
-	private renderPersistentText(): void {
-		const textContent = this.getPersistentTextContent();
-		const selection = window.getSelection();
+		const imageElements = this.entriesContainer.querySelectorAll('img');
+		imageElements.forEach(async img => {
+			const imgData = this.noteManager.fetchImageData(img.dataset.srcpath);
 
-		if (!selection) return;
-
-		this.saveSelection();
-
-		this.persistentTextInput.innerHTML = '';
-
-		for (const paragraph of textContent) {
-			for (const line of paragraph) {
-				const parsed = this.markdownParser.parseLine(line, true);
-				this.persistentTextInput.innerHTML += this.markdownParser.renderHTML(parsed, true);
+			if (imgData) {
+				const data = await NoteUtils.getImageAsBase64(imgData.uuid);
+				img.src = `data:${imgData.type};base64,${data}`;
 			}
-		}
-		this.restoreSelection();
+		});
 	}
-
-	private insertAroundSelection(char: string, bothSides: boolean): void {
-		const sel = window.getSelection();
-		if (!sel || !sel.rangeCount) return;
-
-		const range = sel.getRangeAt(0);
-		const fragment = range.extractContents(); // preserves all HTML
-
-		const wrapper = document.createElement('span');
-
-		if (bothSides) {
-			wrapper.appendChild(document.createTextNode(char));
-		}
-
-		wrapper.appendChild(fragment);
-
-		if (bothSides) {
-			wrapper.appendChild(document.createTextNode(char));
-		}
-
-		range.insertNode(wrapper);
-
-		sel.removeAllRanges();
-		const newRange = document.createRange();
-
-		if (fragment.childNodes.length === 0) {
-			newRange.setStart(wrapper.firstChild!, 1);
-		} else {
-			newRange.setStartAfter(wrapper);
-		}
-
-		newRange.collapse(true);
-		sel.addRange(newRange);
-	}
-
 
 
 	private updateSaveStateDisplay(noteID?: string): void {
 		const noteData = this.noteManager.getNoteData(noteID);
 		if (!noteData) return; //TODO
 
-		if (noteData.id == this.noteManager.getActivenoteID()) this.updateTitleDisplay(noteData.title, noteData.isUnsaved);
+		if (noteData.id == this.noteManager.getActiveNoteID()) this.updateTitleDisplay(noteData.title, noteData.isUnsaved);
 		this.updateNoteLabelDisplay(noteData.id, noteData.title, noteData.isUnsaved);
 	}
 
 	private updateNoteLabelDisplay(noteID: string, noteTitle: string, isUnsaved: boolean): void {
 		const noteLabelElement = document.querySelector(`label[for="${noteID}"]`) as HTMLLabelElement;
+
+		if (!noteLabelElement) return;
 		if (noteID != '.overview') noteLabelElement.textContent = (isUnsaved ? '* ' : '') + (noteTitle).slice(0,this.noteManager.userSettings.maxTabTitleLength);
 		if (noteTitle.length > this.noteManager.userSettings.maxTabTitleLength) noteLabelElement.textContent += '...';
 	}

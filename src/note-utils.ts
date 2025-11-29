@@ -1,5 +1,5 @@
 import { BaseDirectory } from '@tauri-apps/api/path';
-import { exists, readFile, readTextFile, writeFile, writeTextFile } from '@tauri-apps/plugin-fs';
+import { exists, mkdir, readFile, readTextFile, writeFile, writeTextFile } from '@tauri-apps/plugin-fs';
 
 export class NoteUtils {
 	public static slugify(text: string): string {
@@ -95,18 +95,57 @@ export class NoteUtils {
 		await writeTextFile(`${filename}.json`, content, { baseDir: BaseDirectory.AppConfig });
 	}
 
+	public static async getImageData(filepath: string): Promise<Uint8Array> {
+		const bytes = await readFile(filepath);
+		return bytes;
+	}
+
+	public static async getLocalImageData(uuid: string): Promise<Uint8Array> {
+		const bytes = await readFile(`images/${uuid}`, { baseDir: BaseDirectory.AppData });
+		return bytes;
+	}
+
+	public static async getImageAsBase64(uuid: string): Promise<string> {
+		const bytes = await NoteUtils.getLocalImageData(uuid);
+		let binary = '';
+		for (let i = 0; i < bytes.length; i++) {
+			binary += String.fromCharCode(bytes[i]);
+		}
+		return btoa(binary);
+	}
+
+	public static getMimeType(path: string): string {
+		const ext = path.split('.').pop()?.toLowerCase();
+		switch (ext) {
+		case 'png': return 'image/png';
+		case 'jpg':
+		case 'jpeg': return 'image/jpeg';
+		case 'gif': return 'image/gif';
+		case 'webp': return 'image/webp';
+		case 'bmp': return 'image/bmp';
+		case 'svg': return 'image/svg+xml';
+		default: return 'application/octet-stream';
+		}
+	}
+
+	public static async writeImageFile(uuid: string, data: Uint8Array): Promise<void> {
+		const dirExists = await exists('images', { baseDir: BaseDirectory.AppData });
+		if (!dirExists) {
+			await mkdir('images', { baseDir: BaseDirectory.AppData });
+		}
+
+		await writeFile(`images/${uuid}`, data, { baseDir: BaseDirectory.AppData });
+	}
+
 	public static startOfDay(date: Date): Date {
 		return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0); 
 	}
-
 	public static startOfDayString(date: string): string {
 		return NoteUtils.formatDate(NoteUtils.startOfDay(new Date(date)));
 	}
-
 	public static startOfTodayString(): string { // CHECK: useless
 		return NoteUtils.formatDate(NoteUtils.startOfDay(new Date()));
 	}
-
 	public static getRelativeTime(date: Date): string {
 		const timeElapsed = (new Date().getTime() - date.getTime()); // time since date in seconds
 
@@ -125,7 +164,6 @@ export class NoteUtils {
 		default:						return NoteUtils.formatDateTime(date);
 		}
 	}
-
 	public static formatDateTime(date: Date): string {
 		// const result = `${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')} 	// This is HH:MM YYYY-MM-DD format
 		// ${date.getFullYear()}-${(date.getMonth()+1).toString().padStart(2,'0')}-${date.getDate().toString().padStart(2,'0')}`;
@@ -135,36 +173,29 @@ export class NoteUtils {
 		return result;
 
 	}
-
 	public static formatTime(date: Date): string {
 		const result = `${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')}`;
 		return result;
 	}
-
 	public static formatDate(date: Date): string { // Can't just use .toISOString() because that isn't local time
 		const year = date.getFullYear();
 		const month = (date.getMonth() + 1).toString().padStart(2, '0');
 		const day = date.getDate().toString().padStart(2, '0');
 		return `${year}-${month}-${day}`;
 	}
-
 	public static countLeadingTabs(line: string, indentString: string): number {
 		return line.match(new RegExp(`^${indentString}+`))?.[0].length || 0;
 
 	}
-
 	public static stripLeadingTabs(line: string, indentString: string): string {
 		return line.replace(new RegExp(`^${indentString}+`), '');
 	}
-
 	public static addDaysToDate(date: Date, days: number): Date {
 		const result = new Date(date.setDate(date.getDate() + days));
 		return result;
 	}
-
 	public static addDaysToDateString(date: string, days: number): string {
 		const result = NoteUtils.formatDate(new Date(new Date(date).setDate(new Date(date).getDate() + days)));
 		return result;
 	}
-
 }

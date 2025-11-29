@@ -5,9 +5,9 @@ export class ToastManager {
 		info: string;
 		warn: string;
 		}> = {
-			error: '#a8393b',
+			error: '#FF0000',
 			info:  '#526b7c',
-			warn:  '#eb6b50',
+			warn:  '#FFA500',
 		};
 
 	private container: HTMLDivElement;

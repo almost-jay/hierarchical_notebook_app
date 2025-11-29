@@ -3,10 +3,11 @@ import { Note } from './note';
 import { NoteUtils } from './note-utils';
 
 export class Overview extends Note {
-	public overviewEntries: Entry[] = [];
+	public overviewEntries: Entry[] = []; // The list of its OWN entries, rather than any entries from other notes
+	private allCollatedEntries: EntryWithSource[] = []; // Should always have the same contents as this.entries
 	private validDates: DateRange;
 	private selectedDates: DateRange;
-	private aggregatedEntries: EntriesByDay;
+	private aggregatedEntries: EntriesByDay; // contains an array of entries with source note IDs for each day
 	private selectednoteID?: string;
 
 	public constructor() {
@@ -44,7 +45,7 @@ export class Overview extends Note {
 	
 	}
 
-	private static collateEntries(allEntries: EntryWithSource[]): EntriesByDay {
+	private static sortEntries(allEntries: EntryWithSource[]): EntriesByDay {
 		const sortedEntries: EntryWithSource[] = [...allEntries].sort((a, b) =>
 			a.entry.created.getTime() - b.entry.created.getTime(),
 		);
@@ -71,9 +72,13 @@ export class Overview extends Note {
 
 			const clonedEntry: Entry = Entry.fromPartial({...currentEntry});
 			if (isNewGroup) nextDisplayGroupId++;
-			clonedEntry.groupId = nextDisplayGroupId;
 
-			aggregatedEntries[day].push(clonedEntry);
+			clonedEntry.id = aggregatedEntries[day].length; 
+
+			entryWrapper.entry = clonedEntry;
+			entryWrapper.displayGroupId = nextDisplayGroupId;
+			
+			aggregatedEntries[day].push(entryWrapper);
 			previousEntryWrapper = entryWrapper;
 		}
 		return aggregatedEntries;
@@ -82,9 +87,8 @@ export class Overview extends Note {
 	public createNewEntry(entryText: string, currentTime: Date, indentLevel: number, groupInterval: number, sourcenoteID?: string): Entry {
 		// Determine groupID based on time and source note
 		let groupID = 0;
-		const entries = this.overviewEntries;
-		if (entries.length > 0) {
-			const prevEntry = entries[entries.length - 1];
+		if (this.overviewEntries.length > 0) {
+			const prevEntry = this.overviewEntries[this.overviewEntries.length - 1];
 			groupID = prevEntry.groupId;
 			const timeSincePrev = currentTime.getTime() - prevEntry.created.getTime();
 			// If time gap or source note changes, increment group
@@ -97,20 +101,29 @@ export class Overview extends Note {
 		}
 
 		// Create new entry
-		const newEntry = new Entry(entries.length, groupID, entryText, currentTime, indentLevel);
+		const newEntry = new Entry(this.overviewEntries.length, groupID, entryText, currentTime, indentLevel);
 
 		// Add to overviewEntries
 		this.overviewEntries.push(newEntry);
 		this.isEntriesUnsaved = true;
 
 		// Re-aggregate for display using EntryWithSource
-		const allEntries: EntryWithSource[] = this.overviewEntries.map(e => ({
+		const allEntries: EntryWithSource[] = this.overviewEntries.map((e, i) => ({
 			entry: e,
 			sourcenoteID: sourcenoteID || this.id,
+			localID: i,
+			originalID: e.id,
+			displayGroupId: e.groupId,
 		}));
 		this.updateEntries(allEntries);
 
 		return newEntry;
+	}
+
+	public getEntryWithSource(entryID: number): EntryWithSource {
+		const targetEntry = this.entries[entryID];
+		const entryWithSource = this.allCollatedEntries.find(entryData => entryData.entry == targetEntry);
+		return entryWithSource;
 	}
 
 	public addEntry(newEntry: Entry): void {
@@ -125,12 +138,14 @@ export class Overview extends Note {
 		this.entries = [];
 	}
 
-	public updateEntries(allEntries: EntryWithSource[]): void { // Collects all entries and parses them
+	public updateEntries(allEntries: EntryWithSource[]): void { // Collects all the entries and parses them
+		this.allCollatedEntries = allEntries;
 		this.overviewEntries.forEach(entry => {
-			const newEntryWrapper: EntryWithSource = { entry: entry, sourcenoteID: this.id };
-			allEntries.push(newEntryWrapper); // Adds its own entries to the collated entry thing
+			const newEntryWrapper: EntryWithSource = { entry: entry, sourcenoteID: this.id, localID: this.allCollatedEntries.length, originalID: entry.id, displayGroupId: entry.groupId };
+			this.allCollatedEntries.push(newEntryWrapper); // Adds its own entries to the collated entry thing
 		});
-		this.aggregatedEntries = Overview.collateEntries(allEntries);
+		this.aggregatedEntries = Overview.sortEntries(this.allCollatedEntries);
+		
 		const earliestDate = Object.keys(this.aggregatedEntries).sort()[0] || this.validDates.getEarlierDate();
 		this.validDates.setStart(earliestDate);
 		this.updateEntriesShown();
@@ -142,7 +157,9 @@ export class Overview extends Note {
 		const endKey: string = this.selectedDates.getLaterDate();
 		for (const day in this.aggregatedEntries) {
 			if (day >= startKey && day <= endKey) {
-				this.entries.push(...this.aggregatedEntries[day]);
+				this.entries.push(...this.aggregatedEntries[day].map(ews =>
+					(ews.entry.groupId = ews.displayGroupId, ews.entry),
+				));
 			}
 		}
 	}
@@ -186,6 +203,11 @@ export class Overview extends Note {
 
 	public getOwnEntries(): Entry[] {
 		return this.overviewEntries;
+	}
+
+	public getDisplayedEntries(): Entry[] {
+		// may need to do a refresh here?
+		return this.entries;
 	}
 
 	public getDates(): { earliest: string, latest: string } {
@@ -251,10 +273,13 @@ class DateRange {
 }
 
 interface EntriesByDay {
-	[yyyyMMdd: string]: Entry[];
+	[yyyyMMdd: string]: EntryWithSource[];
 }
 
 export interface EntryWithSource {
 	entry: Entry;
 	sourcenoteID: string;
+	localID: number; // position in the array the EWS is stored in
+	originalID: number; // the ID of the entry when it was in the source note
+	displayGroupId: number;
 }

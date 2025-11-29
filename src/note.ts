@@ -4,7 +4,7 @@ import { NoteUtils } from './note-utils';
 export class Note {
 	public id: string; // Slugified version of title
 	public title: string;
-	public entries: Entry[] = [];
+	protected entries: Entry[] = [];
 	public created: Date;
 	public lastSaved?: Date;
 	protected isEntriesUnsaved: boolean = false;
@@ -12,6 +12,9 @@ export class Note {
 	protected isTitleSet: boolean = false;
 	private persistentText: string = '';
 	private savedPersistentText: string = '';
+	private persistentTextHistory: string[] = [''];
+	private lastHistoryUpdate: number = 0;
+	private historyIndex: number = 0;
 
 	public constructor(title: string, created?: Date, lastSaved?: Date, savedPersistentText?: string) {
 		this.updateTitle(title);
@@ -20,7 +23,7 @@ export class Note {
 		if (savedPersistentText) this.savedPersistentText = savedPersistentText;
 	}
 
-	public static async loadFromFile(noteID: string): Promise<Note> {
+	public static async loadFromFile(noteID: string, undoStackSize: number, saveDebounceTime: number): Promise<Note> {
 		const persistentFileName: string = `${noteID}-persistent`;
 		const entriesFileName: string = `${noteID}-entries`;
 		if (await NoteUtils.doesFileExist(persistentFileName+'.md')) {
@@ -33,7 +36,7 @@ export class Note {
 			const textContent = textContentMatch ? textContentMatch[1].trim() : '';
 			
 			const newNote = new Note(title, created, lastSaved, textContent);
-			newNote.updateSavedPersistentTextContent(textContent);
+			newNote.updateSavedPersistentTextContent(textContent, undoStackSize, saveDebounceTime );
 
 			newNote.isTitleSet = true;
 
@@ -60,6 +63,13 @@ export class Note {
 		}
 	}
 
+	public modifyEntry(entryID: number, newText: string, editedTime: Date): void {
+		if (this.entries[entryID].text == newText) return;
+		
+		this.entries[entryID].modifyEntry(newText, editedTime);
+		this.isEntriesUnsaved = true;
+	}
+
 	public updateTitle(newTitle: string): void {
 		this.title = newTitle;
 		this.id = NoteUtils.slugify(newTitle);
@@ -78,15 +88,72 @@ export class Note {
 		return this.persistentText;
 	}
 
-	public updatePersistentTextContent(textContent: string): void {
+	public updatePersistentTextContent(textContent: string, undoStackSize: number, saveDebounceTime: number): void {
+		if (this.persistentText == textContent) return;
+
 		this.persistentText = textContent;
-		
+		this.updatePersistentTextHistory(undoStackSize, saveDebounceTime);
 		this.isPersistentTextUnsaved = !(this.persistentText == this.savedPersistentText);
 	}
 
-	public updateSavedPersistentTextContent(textContent: string): void {
+	public updateSavedPersistentTextContent(textContent: string, undoStackSize: number, saveDebounceTime: number): void {
+		if (this.savedPersistentText == textContent) return;
+
 		this.savedPersistentText = textContent;
-		this.updatePersistentTextContent(textContent);
+		this.updatePersistentTextContent(textContent, undoStackSize, saveDebounceTime);
+	}
+
+	public updatePersistentTextHistory(undoStackSize: number, saveDebounceTime: number, force: boolean = false): void {
+		if (!this.isPersistentTextUnsaved) return;
+		if (this.persistentTextHistory[this.historyIndex] == this.persistentText) return;
+
+		const currentTime = Date.now();
+		if (currentTime - this.lastHistoryUpdate > saveDebounceTime || force) {
+
+			if (this.historyIndex < this.persistentTextHistory.length) {
+				this.persistentTextHistory.splice(this.historyIndex + 1);
+			}
+			this.persistentTextHistory.push(this.persistentText);
+
+			if (this.persistentTextHistory.length > undoStackSize) {
+				this.persistentTextHistory.shift();
+			}
+
+			this.lastHistoryUpdate = currentTime;
+			this.historyIndex = this.persistentTextHistory.length - 1;
+		}
+	}
+
+	public undo(undoStackSize: number, saveDebounceTime: number): boolean {
+		if (this.historyIndex == 0) return false;
+
+		this.updatePersistentTextHistory(undoStackSize, saveDebounceTime, true);
+
+		this.historyIndex--;
+		this.updatePersistentTextContent(this.persistentTextHistory[this.historyIndex], undoStackSize, saveDebounceTime);
+		return true;
+	}
+
+	public redo(undoStackSize: number, saveDebounceTime: number): boolean {
+		if (this.historyIndex >= this.persistentTextHistory.length - 1) return false;
+
+		this.historyIndex++;
+		this.updatePersistentTextContent(this.persistentTextHistory[this.historyIndex], undoStackSize, saveDebounceTime);
+		return true;
+	}
+
+	public deleteEntry(entryID: number): void {
+		const entries = this.getOwnEntries();
+		if (!entries[entryID]) return;
+		
+		if (entries[entryID].id == entryID) {
+			entries.splice(entryID, 1);
+			for (let i = entryID; i < entries.length; i++) {
+				entries[i].id = i;
+			}
+
+			this.isEntriesUnsaved = true;
+		}
 	}
 
 	public async save(): Promise<boolean> {
@@ -135,7 +202,12 @@ export class Note {
 	public getOwnEntries(): Entry[] {
 		return this.entries;
 	}
-	
+
+	/* This exists because of the overview class **/
+	public getDisplayedEntries(): Entry[] {
+		return this.entries;
+	}
+
 	public createNewEntry(entryText: string, currentTime: Date, indentLevel: number, groupInterval: number): Entry {
 		const entries = this.entries;
 		let groupID = 0;

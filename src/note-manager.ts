@@ -1,13 +1,14 @@
 import { Entry } from './entry';
 import { Note } from './note';
 import { NoteUtils } from './note-utils';
-import { Overview } from './overview';
+import { EntryWithSource, Overview } from './overview';
 
 const CONFIG_FILENAME = 'config';
 
 export class NoteManager {
 	public notes: Map<string, Note>;
 	public overview: Overview;
+	public cachedImages: ImageData[] = [];
 	private activenoteID: string = '.overview';
 	private openNotes: string[]; //openNotes ∩ unopenedNotes = ∅ 
 	private unopenedNotes: string[]; 
@@ -21,6 +22,9 @@ export class NoteManager {
 		dragHandleWidth: 20, // px
 		maxTabTitleLength: 30, // chars
 		restoreTextPreviewLength: 500, // chars
+		undoStackSize: 50, // number of undo/redo steps to save
+		saveDebounceTime: 1500, // ms
+		imageCacheFilename: 'img_data',
 	};
 
 	public constructor() {
@@ -54,7 +58,7 @@ export class NoteManager {
 					this.notes.set('.overview', this.overview);
 					if (!newOverview) throw new Error('Could not load Overview!');
 				} else {
-					const newNote = await Note.loadFromFile(noteID);
+					const newNote = await Note.loadFromFile(noteID, this.userSettings.undoStackSize, this.userSettings.saveDebounceTime);
 					if (newNote) {
 						this.addNewNote(newNote);
 						notesAdded.push({ id: noteID, title: newNote.title });
@@ -110,6 +114,13 @@ export class NoteManager {
 		}
 	}
 
+	public async loadImageData(): Promise<void> {
+		if (await NoteUtils.doesCacheExist(this.userSettings.imageCacheFilename)) {
+			const loadedImageData = await NoteUtils.readCache(this.userSettings.imageCacheFilename);
+			this.cachedImages = JSON.parse(loadedImageData) as ImageData[] || [];
+		}
+	}
+
 	public createNewNote(noteTitle?: string): string { // Used to actually create a note
 		noteTitle = noteTitle || `Untitled ${this.notes.size}`;
 		const newNote = new Note(noteTitle);
@@ -147,10 +158,10 @@ export class NoteManager {
 	}
 
 	public updateOverview(): void {
-		const allEntries = [];
+		const allEntries: EntryWithSource[] = [];
 		this.overview.clearEntries();
 		for (const note of this.notes.values()) {
-			allEntries.push(...note.entries.map(entry => ({ entry: entry, sourcenoteID: note.id })));  // Deliberately using .entries instead of getOwnEntries here
+			allEntries.push(...note.getDisplayedEntries().map((entry, i) => ({ entry: entry, sourcenoteID: note.id, localID: i + allEntries.length, originalID: entry.id, displayGroupId: entry.groupId })));
 		}
 		this.overview.updateEntries(allEntries);
 	}
@@ -244,6 +255,7 @@ export class NoteManager {
 		const noteHeadings = Array.from(this.openNotes).join('\n') + '\n' + Array.from(this.unopenedNotes).join('\n') + '\n.overview';
 		await NoteUtils.writeMarkdownFile(this.userSettings.noteIndexFileName,noteHeadings);
 		await this.writeToCache();
+		await this.writeImageCache();
 	}
 	/**
 	 * 
@@ -291,7 +303,7 @@ export class NoteManager {
 		if (!note) return false;
 		
 		const wasUnsaved = note.isUnsaved();
-		note.updatePersistentTextContent(newText);
+		note.updatePersistentTextContent(newText, this.userSettings.undoStackSize, this.userSettings.saveDebounceTime);
 
 		const isUnsavedNow = note.isUnsaved();
 
@@ -306,17 +318,73 @@ export class NoteManager {
 		return wasUnsaved != isUnsavedNow;
 	}
 
-	public editEntry(entryID: number): void {
+	public getEntryText(entryID: number): string {
 		const note = this.notes.get(this.activenoteID);
 		if (!note) return;
 
-		const targetEntry = note.getOwnEntries()[entryID];
-		if (!targetEntry) console.log ('fail to find entry: '+entryID); return;
+		const targetEntry = note.getDisplayedEntries()[entryID];
+		
+		if (!targetEntry) throw new Error(`Could not find entry with ID ${entryID}`);
 
+		return targetEntry.text;
+	}
+
+	public editEntry(entryID: number, newText: string, editedTime: Date): string {
+		const note = this.notes.get(this.activenoteID);
+		if (!note) return;
+
+		if (this.activenoteID == '.overview') {
+			const entryWithSource: EntryWithSource = this.overview.getEntryWithSource(entryID);
+			if (!entryWithSource) return;
+
+			const note = this.notes.get(entryWithSource.sourcenoteID);
+			if (!note) return;
+			note.modifyEntry(entryWithSource.originalID, newText, editedTime);
+			this.updateOverview();
+			return note.id;
+		} else {
+			note.modifyEntry(entryID, newText, editedTime);
+			return note.id;
+		}
+	}
+
+	public deleteEntry(entryID: number): string {
+		const note = this.notes.get(this.activenoteID);
+		if (!note) return '';
+
+		if (this.activenoteID == '.overview') {
+
+			const entryWithSource: EntryWithSource = this.overview.getEntryWithSource(entryID);
+			if (!entryWithSource) return;
+
+			const note = this.notes.get(entryWithSource.sourcenoteID);
+			if (!note) return;
+			
+			note.deleteEntry(entryWithSource.originalID);
+			this.updateOverview();
+			return note.id;
+		} else {
+			note.deleteEntry(entryID);
+			return note.id;
+		}
 		
 	}
 
-	public getActivenoteID(): string {
+	public undo(): boolean { // TODO: Allow IDs
+		const note = this.notes.get(this.activenoteID);
+		if (!note) return false
+		const result = note.undo(this.userSettings.undoStackSize, this.userSettings.saveDebounceTime);
+		return result;
+	}
+
+	public redo(): boolean { // TODO: Allow IDs
+		const note = this.notes.get(this.activenoteID);
+		if (!note) return false;
+
+		return note.redo(this.userSettings.undoStackSize, this.userSettings.saveDebounceTime);
+	}
+
+	public getActiveNoteID(): string {
 		return this.activenoteID;
 	}
 
@@ -338,7 +406,7 @@ export class NoteManager {
 	public getCurrentEntries(): Entry[] {
 		const note = this.notes.get(this.activenoteID);
 		if (!note) return [];
-		return note.entries; // deliberately .entries and not .getOwnEntries()
+		return note.getDisplayedEntries();
 	}
 
 	public getUnopenedNotes(): string[] {
@@ -373,7 +441,7 @@ export class NoteManager {
 	}
 
 
-	private isAnythingUnsaved(): boolean {
+	public isAnythingUnsaved(): boolean {
 		for (const note of this.notes.values()) {
 			if (note.isUnsaved()) {
 				return true;
@@ -396,11 +464,38 @@ export class NoteManager {
 	}
 
 	public async writeToCache(): Promise<void> {
-		console.log('writing to cache');
 		this.cachedData.currentnoteID = this.activenoteID;
 		this.cachedData.openNotes = this.openNotes;
 
 		await NoteUtils.writeCache(this.userSettings.cacheFileName, JSON.stringify(this.cachedData, null, 2));
+	}
+
+	private async writeImageCache(): Promise<void> {
+		const imageJson = JSON.stringify(this.cachedImages);
+		
+		await NoteUtils.writeCache(this.userSettings.imageCacheFilename, imageJson);
+	}
+
+	public async storeImage(filepath: string): Promise<void> {
+		if (this.fetchImageData(filepath)) return;
+		
+		const imageData = await NoteUtils.getImageData(filepath);
+		const imageMimeType = await NoteUtils.getMimeType(filepath);
+		const uuid = crypto.randomUUID();
+
+		const newImageData: ImageData = { sourceFile: filepath, type: imageMimeType, uuid };
+		this.cachedImages.push(newImageData);
+
+		await NoteUtils.writeImageFile(uuid, imageData);
+	}
+
+	public fetchImageData(filepath: string): ImageData {
+		const match = this.cachedImages.find(img => img.sourceFile === filepath);
+		if (match) {
+			return match;
+		} else {
+			return;
+		}
 	}
 }
 
@@ -423,4 +518,14 @@ type UserSettings = {
 	dragHandleWidth: number;
 	maxTabTitleLength: number;
 	restoreTextPreviewLength: number;
+	undoStackSize: number;
+	saveDebounceTime: number;
+	imageCacheFilename: string;
 };
+
+
+interface ImageData {
+	sourceFile: string;
+	type: string; // MimeType
+	uuid: string;
+}

@@ -84,7 +84,7 @@ export class Overview extends Note {
 		return aggregatedEntries;
 	}
 
-	public createNewEntry(entryText: string, currentTime: Date, indentLevel: number, groupInterval: number, sourcenoteID?: string): Entry {
+	public createNewEntry(entryText: string, currentTime: Date, indentLevel: number, groupInterval: number, quotedEntryID?: number, sourcenoteID?: string): Entry {
 		// Determine groupID based on time and source note
 		let groupID = 0;
 		if (this.overviewEntries.length > 0) {
@@ -101,7 +101,7 @@ export class Overview extends Note {
 		}
 
 		// Create new entry
-		const newEntry = new Entry(this.overviewEntries.length, groupID, entryText, currentTime, indentLevel);
+		const newEntry = new Entry(this.overviewEntries.length, groupID, entryText, currentTime, indentLevel, quotedEntryID);
 
 		// Add to overviewEntries
 		this.overviewEntries.push(newEntry);

@@ -14,3 +14,5 @@ Screenshots from 28/11/25:
 ![Entry view with inline images](images/Screenshot_20251128_223233.png)
 
 ![Overview page with markdown formatting](images/Screenshot_20251128_223338.png)
+
+The markdown editor is from https://github.com/jefago/tiny-markdown-editor and I made several modifications to make it work better with my project. This is a really awesome library!

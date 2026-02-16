@@ -28,6 +28,8 @@ export default defineConfig([{
     },
 
 	files: ["src/**/*.ts"],
+
+	ignores: ["src/vendor/**","src/assets/**"],
 	
     rules: {
         "sort-class-members/sort-class-members": ["error", {

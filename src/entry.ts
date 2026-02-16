@@ -21,7 +21,7 @@ export class Entry {
 	public quotedId?: number;
 	public lastEdited?: Date;
 
-	public constructor(id: number, groupId: number, text: string, created: Date, indentLevel: number, isPinned?: boolean, lastEdited?: Date, quotedId?: number) {
+	public constructor(id: number, groupId: number, text: string, created: Date, indentLevel: number, quotedId?: number, isPinned?: boolean, lastEdited?: Date) {
 		this.id = id;
 		this.groupId = groupId;
 		this.text = text;
@@ -39,9 +39,9 @@ export class Entry {
 			partial.text,
 			partial.created,
 			partial.indentLevel,
+			partial.quotedId,
 			partial.isPinned,
 			partial.lastEdited,
-			partial.quotedId,
 		);
 	}
 
@@ -58,7 +58,7 @@ export class Entry {
 		const textLength = dataView.getUint16(ENTRY_BINARY_FORMAT.TEXT_LENGTH_OFFSET);
 		const text = new TextDecoder('utf-8').decode(file.slice(ENTRY_BINARY_FORMAT.HEADER_SIZE, ENTRY_BINARY_FORMAT.HEADER_SIZE + textLength)); // ? Should this be split across multiple lines
 
-		return new Entry(id, groupId, text, created, indentLevel, isPinned, lastEdited, quotedId);
+		return new Entry(id, groupId, text, created, indentLevel, quotedId, isPinned, lastEdited);
 	}
 
 	public toBinary(): ArrayBuffer {

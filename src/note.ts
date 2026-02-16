@@ -208,7 +208,7 @@ export class Note {
 		return this.entries;
 	}
 
-	public createNewEntry(entryText: string, currentTime: Date, indentLevel: number, groupInterval: number): Entry {
+	public createNewEntry(entryText: string, currentTime: Date, indentLevel: number, groupInterval: number, quotedEntryID?: number): Entry {
 		const entries = this.entries;
 		let groupID = 0;
 
@@ -220,7 +220,7 @@ export class Note {
 				groupID++;
 			}
 		}
-		const newEntry = new Entry(this.entries.length, groupID, entryText, currentTime, indentLevel);
+		const newEntry = new Entry(this.entries.length, groupID, entryText, currentTime, indentLevel, quotedEntryID);
 		this.isEntriesUnsaved = true;
 		this.addEntry(newEntry);
 

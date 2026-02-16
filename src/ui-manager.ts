@@ -1,23 +1,32 @@
+import { appLocalDataDir } from '@tauri-apps/api/path';
 import { open } from '@tauri-apps/plugin-dialog';
 
+import { Editor, ChangeEvent } from './vendor/tiny-mde-0.2.15/TinyMDE';
+import { CommandBar } from './vendor/tiny-mde-0.2.15/TinyMDECommandBar';
 import { MarkdownParser } from './markdown-parser';
 import { NoteManager } from './note-manager';
-import { NoteSelector } from './note-selector';
 import { NoteUtils } from './note-utils';
-import { ToastManager } from './toast-manager';
-import { appLocalDataDir } from '@tauri-apps/api/path';
+import Notifier from 'notifier-ts';
+import { Entry } from './entry';
 
 export class UIManager {
 	private noteTabsContainer: HTMLDivElement;
 	private entriesContainer: HTMLDivElement;
 	private logInput: HTMLTextAreaElement;
-	private persistentTextInput: HTMLTextAreaElement;
+	private activeQuotePreview: HTMLDivElement;
+	private activeQuotedEntryIndex: number | null = null;
+	
+	// private persistentTextInput: HTMLDivElement;
+	// private persistentTextEditor: HTMLTextAreaElement;
+	private tinyMDE: Editor;
+
 	private overviewDateSelector: HTMLInputElement;
 	private overviewDateRangeSelector: HTMLInputElement;
 	private entryPopupMenu: HTMLDivElement;
 	private isPopupMenuActive: boolean = false;
 	private renderEntryMarkdown: boolean = true;
 
+	private willDeleteNote: boolean = false;
 	private highlightedEntryID: number | null = null;
 	private currentlyEditedEntryID: null | number = null;
 	private currentIndentationLevel: number = 0;
@@ -25,8 +34,6 @@ export class UIManager {
 
 	private imageDirectory: string;
 
-	private noteSelector: NoteSelector;
-	private toastManager: ToastManager;
 	private noteManager: NoteManager;
 	private markdownParser: MarkdownParser;
 
@@ -34,7 +41,8 @@ export class UIManager {
 		this.noteTabsContainer = document.getElementById('note-tabs') as HTMLDivElement;
 		this.entriesContainer = document.getElementById('entry-container') as HTMLDivElement;
 		this.logInput = document.getElementById('log-input') as HTMLTextAreaElement;
-		this.persistentTextInput = document.getElementById('persistent-text-input') as HTMLTextAreaElement;
+		this.activeQuotePreview = document.getElementById('active-quote-preview') as HTMLDivElement;
+		// this.persistentTextInput = document.getElementById('persistent-text-input') as HTMLDivElement;
 		this.overviewDateSelector = document.getElementById('start-date-selector') as HTMLInputElement;
 		this.overviewDateRangeSelector = document.getElementById('date-range-selector') as HTMLInputElement;
 		this.entryPopupMenu = document.getElementById('popup-menu') as HTMLDivElement;
@@ -43,14 +51,29 @@ export class UIManager {
 		this.entriesContainer.innerHTML = '';
 
 		this.noteManager = new NoteManager();
-		this.toastManager = new ToastManager(this.noteManager.userSettings.toastDuration);
-		this.noteSelector = new NoteSelector((noteID) => {
-			this.openNote(noteID);
-			this.selectNoteTab(noteID);
-			this.noteManager.writeToCache();
-		});
+		Notifier.setDefaults({ theme: 'dark', duration: this.noteManager.userSettings.toastDuration });
 		this.markdownParser = new MarkdownParser();
 		
+		// const persistentTextInput = document.getElementById('persistent-text-input') as HTMLDivElement;
+		this.tinyMDE = new Editor({
+			// editor: persistentTextInput,
+			element: document.getElementById('editor-container'),
+			customInlineGrammar: {
+				// emoji: {
+				// 	regexp: /^(:)([a-z_-]+)(:)/,
+				// 	replacement: '<span class="TMMark">$1</span><i class="TMEmoji">$2</i><span class="TMMark">$3</span>',
+				// },
+			},
+		});
+
+		this.tinyMDE.e.id = 'persistent-text-input';
+		this.tinyMDE.e.dataset.placeholder = 'Permanent note content...'; // FIXME: Never actually makes a difference because TinyMDE initialises with divs alr inside
+		// this.tinyMDE.e.classList.add('big-note');
+
+		const _commandBar = new CommandBar({
+			element: 'persistent-commandbar',
+			editor: this.tinyMDE,
+		});
 
 		this.initialiseInput();
 	}
@@ -61,23 +84,23 @@ export class UIManager {
 		try {
 			await this.noteManager.loadUserSettings();
 		} catch (err) {
-			this.toastManager.show('error','Error loading config file: '+err);
+			Notifier.error('Error loading config file: '+err);
 		}
 
 		try {
 			await this.noteManager.loadImageData();
 		} catch (err) {
-			this.toastManager.show('error','Error loading image data: '+err);
+			Notifier.error('Error loading image data: '+err);
 		}
 
 		let result = [];
 		try {
 			result = await this.noteManager.loadAllNotes();
 			if (result.length > 0) {
-				this.toastManager.show('info','Loaded all notes from headings file');
+				Notifier.success('Loaded all notes from headings file');
 			}
 		} catch (err) {
-			this.toastManager.show('error','Error loading notes: '+err);
+			Notifier.error('Error loading notes: '+err);
 		}
 		try {
 			const openNotes = await this.noteManager.restorePreviousSession();
@@ -88,7 +111,7 @@ export class UIManager {
 			})
 
 		} catch (err) {
-			this.toastManager.show('error','Error loading notes: '+err);
+			Notifier.error('Error loading notes: '+err);
 		}
 		
 		this.setupOverviewDateSelectors();
@@ -123,7 +146,23 @@ export class UIManager {
 			} else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() == 'o') { // Ctrl + O to open a note
 				e.preventDefault();
 				const unopenedNotes = this.noteManager.getUnopenedNotes();
-				this.noteSelector.showModal(unopenedNotes);
+				if (unopenedNotes.length == 0) {
+					Notifier.info('No notes to open!');
+				} else {
+					Notifier.select('Select note...', unopenedNotes, { isBlocking: true, allowNewOptions: true }).then((noteID) => {
+						if (noteID) {
+							if (unopenedNotes.includes(noteID)) {
+								this.openNote(noteID);
+								this.selectNoteTab(noteID);
+								this.noteManager.writeToCache();
+							} else {
+								Notifier.confirm('Create new note with title "'+noteID+'"?', { isBlocking: true }).then((result) => {
+									if (result == true) this.addNewNote(noteID);
+								});
+							}
+						}
+					});
+				}
 			} else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() == 'w') { // Ctrl + W to close a note
 				e.preventDefault();
 				this.closeCurrentNote();
@@ -137,36 +176,36 @@ export class UIManager {
 	}
 
 	private setupPersistentTextHandlers(): void {
-		document.getElementById('right-panel').addEventListener('click', () => {
-			this.persistentTextInput.focus();
-		});
+		// document.getElementById('right-panel').addEventListener('click', () => {
+		// 	this.tinyMDE.e.focus();
+		// });
 
-		this.persistentTextInput.addEventListener('keydown', (e: KeyboardEvent) => {
-			if (e.ctrlKey && e.key.toLowerCase() == 'z') {
-				this.noteManager.undo();
-				this.persistentTextInput.value = this.noteManager.getPersistentText();
-				this.persistentTextInput.focus();
+		// this.persistentTextInput.addEventListener('keydown', (e: KeyboardEvent) => {
+		// 	if (e.ctrlKey && e.key.toLowerCase() == 'z') {
+		// 		this.noteManager.undo();
+		// 		this.persistentTextInput.value = this.noteManager.getPersistentText();
+		// 		this.persistentTextInput.focus();
 
-				e.preventDefault();
-			}
-			if (e.ctrlKey && e.key.toLowerCase() == 'y') {
-				this.noteManager.redo();
-				this.persistentTextInput.value = this.noteManager.getPersistentText();
-				this.persistentTextInput.focus();
+		// 		e.preventDefault();
+		// 	}
+		// 	if (e.ctrlKey && e.key.toLowerCase() == 'y') {
+		// 		this.noteManager.redo();
+		// 		this.persistentTextInput.value = this.noteManager.getPersistentText();
+		// 		this.persistentTextInput.focus();
 
-				e.preventDefault();
-			}
-		});
+		// 		e.preventDefault();
+		// 	}
+		// });
 
-		this.persistentTextInput.addEventListener('input', () => {
+		this.tinyMDE.addEventListener('change', (e: ChangeEvent) => {
 			if (this.draggedTab) return;
-			const plainText = this.persistentTextInput.value;
-
+			const plainText = e.content;
+			
 			const saveStateChanged = this.noteManager.updatePersistentText(plainText);
 			if (saveStateChanged) {
 				this.updateSaveStateDisplay();
 			}
-		})
+		});
 	}
 
 
@@ -196,18 +235,37 @@ export class UIManager {
 			if (!targetTab) return;
 			this.draggedTab = targetTab;
 			this.draggedTab.classList.add('dragging');
+
+			const deleteNoteElement = document.createElement('div');
+			deleteNoteElement.id = 'delete-note-tab';
+			deleteNoteElement.classList.add('tab');
+			deleteNoteElement.classList.add('tab-label');
+			deleteNoteElement.textContent = 'Delete note';
+			this.noteTabsContainer.insertBefore(deleteNoteElement,this.noteTabsContainer.firstElementChild); // POSSIBLE ISSUE
+
 			document.body.style.userSelect = 'none';
 			document.body.style.webkitUserSelect = 'none';
 		});
 
 		window.addEventListener('mouseup', () => {
 			if (!this.draggedTab) return;
+
 			const newTabIndex = Array.from(this.noteTabsContainer.children).indexOf(this.draggedTab);
 			this.noteManager.reorderOpenNotes(this.draggedTab.querySelector('.tab-input').id, newTabIndex);
+
+			if (this.willDeleteNote) {
+				this.willDeleteNote = false;
+				this.draggedTab.classList.remove('threatened');
+				this.deleteNote(this.draggedTab.querySelector('.tab-input').id);
+			}
+
+			const deleteNoteElement = document.getElementById('delete-note-tab');
+			deleteNoteElement.remove();
 			this.draggedTab.classList.remove('dragging');
 			this.draggedTab = null;
 			document.body.style.userSelect = '';
 			document.body.style.webkitUserSelect = '';
+			
 		});
 
 		this.noteTabsContainer.addEventListener('mousemove', (e: MouseEvent) => {
@@ -219,15 +277,40 @@ export class UIManager {
 			for (const tab of tabs) {
 				const rect = tab.getBoundingClientRect();
 				if (e.clientY < rect.top + rect.height / 2) {
-					this.noteTabsContainer.insertBefore(this.draggedTab, tab);
-					inserted = true;
-					break;
+					if (tab.id == 'delete-note-tab') {
+						if (!this.willDeleteNote) {
+							this.willDeleteNote = true;
+							this.draggedTab.classList.add('threatened');
+						}
+						break;
+					} else {
+						if (this.willDeleteNote) {
+							this.willDeleteNote = false;
+							this.draggedTab.classList.remove('threatened');
+						}
+						this.noteTabsContainer.insertBefore(this.draggedTab, tab);
+						inserted = true;
+						break;
+					}
 				}
 			}
 
 			if (!inserted) this.noteTabsContainer.appendChild(this.draggedTab);
 			
 		});
+	}
+
+	private async deleteNote(noteID: string): Promise<boolean> {
+		const result = await confirm('Delete note: '+noteID+'?');
+		
+		if (result) {
+			this.closeNote(noteID);
+			if (this.noteManager.deleteNote(noteID)) {
+				Notifier.success(`Deleted ${noteID}`);
+			}
+		} else {
+			return false;
+		}
 	}
 
 	private setupOverviewDateSelectors(): void {
@@ -329,8 +412,9 @@ export class UIManager {
 	private submitEntry(): void {
 		if (this.currentlyEditedEntryID == null) {
 			if (this.logInput.value.length > 0) {
-				this.noteManager.submitEntry(this.logInput.value, new Date()); // passes back an entry
+				this.noteManager.submitEntry(this.logInput.value, new Date(), this.activeQuotedEntryIndex); // passes back an entry
 				this.logInput.value = '';
+				this.clearQuotedEntry();
 				this.displayCurrentEntries();
 				this.updateSaveStateDisplay();
 				this.updateLogInputHeight();
@@ -356,7 +440,7 @@ export class UIManager {
 
 				this.noteManager.writeToCache();
 			} catch(err) {
-				this.toastManager.show('error','Error editing entry: '+err);
+				Notifier.error('Error editing entry: '+err);
 			}
 		}
 	}
@@ -402,7 +486,7 @@ export class UIManager {
 					this.editEntry(this.highlightedEntryID);
 					break;
 				case 'format_quote':
-					// quote/reply to entry
+					this.quoteEntry(this.highlightedEntryID);
 					break;
 				case 'content_copy':
 					// copy entry text
@@ -428,7 +512,7 @@ export class UIManager {
 			if (target.tagName == 'SPAN') {
 				span = target.parentElement.querySelector('.entry-text-content');
 			} else if (target.classList.contains('entry-content') || target.classList.contains('entry-text')) {
-				span = target.querySelector('.entry-text-content');
+				span = target.querySelector('.entry-text-content:not(.quote-preview-line)');
 			}
 			if (span) {
 				let isImageChild = false;
@@ -449,10 +533,10 @@ export class UIManager {
 						const lastRect = last.getBoundingClientRect();
 						const parentRect = this.entriesContainer.getBoundingClientRect();
 
-						const margin = 8;
+						const margin = 3;
 						const top = firstRect.top - parentRect.top - (margin - 2);
 						const height = (lastRect.bottom - firstRect.top) + (2 * margin);
-						this.entriesContainer.style.setProperty('--line-top', `${top}px`);
+						this.entriesContainer.style.setProperty('--line-top', `${top}px`); // These variables determine where the line highlight begins and ends
 						this.entriesContainer.style.setProperty('--line-height', `${height}px`);
 						
 						//if (this.noteManager.getActiveNoteID() != '.overview') {
@@ -483,6 +567,67 @@ export class UIManager {
 		});
 	}
 
+	private quoteEntry(entryID: number): void {
+		const quotedEntry: Entry = this.noteManager.getEntry(entryID);
+		this.activeQuotedEntryIndex = entryID;
+		this.activeQuotePreview.innerHTML = '';
+		this.createQuoteElement(quotedEntry, this.activeQuotePreview);
+		const header = this.activeQuotePreview.querySelector('.quote-preview-header');
+		if (header) {
+			const close = document.createElement('button');
+			close.classList.add('quote-preview-close');
+			close.textContent = '×';
+			close.onclick = () => this.clearQuotedEntry();
+
+			header.append(close);
+		}
+		this.activeQuotePreview.style.display = 'flex';
+		
+	}
+
+	private createQuoteElement(quotedEntry: Entry, parentContainer: HTMLElement): void {
+		const header = document.createElement('div');
+		header.className = 'quote-preview-header';
+
+		const timestamp = document.createElement('span');
+		timestamp.className = 'timestamp-quoted';
+		timestamp.textContent = NoteUtils.formatTime(quotedEntry.created);
+
+		const body = document.createElement('div');
+		body.classList.add('quote-preview-body');
+		const lines = quotedEntry.text.split('\n');
+
+		for (const line of lines.slice(1)) {
+			const lineDiv = document.createElement('div');
+			lineDiv.classList.add('quote-preview-line');
+			lineDiv.textContent = line;
+			body.appendChild(lineDiv);
+		}
+
+		const headerLine = document.createElement('span');
+		headerLine.classList.add('quote-preview-line');
+		headerLine.textContent = lines[0];
+		header.append(timestamp, headerLine);
+		
+		parentContainer.append(header, body);
+
+		if (body.scrollHeight > 500) {
+			body.classList.add('collapsed');
+		}
+
+		body.onclick = () => {
+			const target = this.entriesContainer.querySelector(`[data-entry-id="${quotedEntry.id}"]`);
+			target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+		};
+	}
+
+	private clearQuotedEntry(): void {
+		this.activeQuotedEntryIndex = null;
+		this.activeQuotePreview.innerHTML = '';
+		this.activeQuotePreview.style.display = 'none';
+		this.logInput.focus();
+	}
+
 	private editEntry(entryID: number): void {
 		console.log('editing pass 1');
 		const entryText: string = this.noteManager.getEntryText(this.highlightedEntryID);
@@ -510,9 +655,8 @@ export class UIManager {
 				this.noteManager.writeToCache();
 			}
 		} catch(err) {
-			this.toastManager.show('error','Error while deleting entry: '+err);
+			Notifier.error('Error while deleting entry: '+err);
 		}
-		
 	}
 
 	private clearLineHighlighting(): void {
@@ -556,8 +700,8 @@ export class UIManager {
 		if (noteID != '.overview') this.logInput.focus();
 	}
 
-	private addNewNote(): void {
-		const newnoteID = this.noteManager.createNewNote();
+	private addNewNote(title?: string): void {
+		const newnoteID = this.noteManager.createNewNote(title);
 		this.openNote(newnoteID);
 		this.selectNoteTab(newnoteID);
 	}
@@ -566,43 +710,40 @@ export class UIManager {
 		try {
 			const noteData = this.noteManager.openNoteData(noteID);
 			if (!noteData) {
-				this.toastManager.show('error',`Unknown error opening note ${noteID}!`);
+				Notifier.error(`Unknown error opening note ${noteID}!`);
 				return;
 			}
 			this.createNoteTab(noteData.id, noteData.title);
 			this.setCurrentNote(noteData.id);
 		} catch (err) {
-			this.toastManager.show('error','Error opening note: '+err);
+			Notifier.error('Error opening note: '+err);
 		}
 	}
 
 	private closeNote(noteID: string): void {
 		try {
-			const newnoteID = this.noteManager.closeCurrentNote();
+			const newnoteID = this.noteManager.closeNote(noteID);
 
 			this.removeNoteTab(noteID);
 
 			this.selectNoteTab(newnoteID);
 			this.setCurrentNote(newnoteID);
 		} catch (err) {
-			this.toastManager.show('error','Error closing note: '+err);
+			Notifier.error('Error closing note: '+err);
 		}
 	}
 
 	private closeCurrentNote(): void {
-		try {
-			const activenoteID = this.noteManager.getActiveNoteID();
-			this.closeNote(activenoteID);
-			this.noteManager.writeToCache();
-		} catch (err) {
-			this.toastManager.show('error','Error closing note: '+err);
-		}
+		const currentnoteID = this.noteManager.getActiveNoteID();
+		if (currentnoteID == '.overview') return;
+
+		this.closeNote(currentnoteID);
 	}
 
 	private async saveCurrentNote(): Promise<void> {
 		try {
 			const currentnoteID = this.noteManager.getActiveNoteID();
-			if (currentnoteID != '.overview') this.noteManager.updatePersistentText(this.persistentTextInput.textContent);
+			if (currentnoteID != '.overview') this.noteManager.updatePersistentText(this.tinyMDE.getContent());
 
 			const result = await this.noteManager.saveNote(currentnoteID);
 
@@ -611,26 +752,26 @@ export class UIManager {
 					if (result.oldID != result.newID) {
 						this.updateNoteTabsID(result.oldID, result.newID, result.newTitle);
 					} else {
-						this.toastManager.show('info',`Saved as ${result.newID}.md`);
+						Notifier.success(`Saved as ${result.newID}.md`);
 					}
 					await this.noteManager.saveMetadata();
 					this.updateNoteLabelDisplay(result.newID, result.newTitle, false); // ALSO CHECK IF BAD
 					this.updateTitleDisplay(result.newTitle, false);
 				} else {
-					this.toastManager.show('error','Unknown error saving current note!');
+					Notifier.error('Unknown error saving current note!');
 				}
 			} else {
-				this.toastManager.show('error','Unknown error saving current note!');
+				Notifier.error('Unknown error saving current note!');
 			}
 		} catch (err) {
-			this.toastManager.show('error','Error saving current note: '+err);
+			Notifier.error('Error saving current note: '+err);
 		}
 	}
 
 	private async saveAllNotes(): Promise<void> {
 		if (!this.noteManager.isAnythingUnsaved()) return;
 		try {
-			this.noteManager.updatePersistentText(this.persistentTextInput.textContent);
+			this.noteManager.updatePersistentText(this.tinyMDE.getContent());
 			let allSuccessful = true;
 			const results = await this.noteManager.saveAllNotes();
 			for (const result of results) {
@@ -641,12 +782,12 @@ export class UIManager {
 					this.updateNoteLabelDisplay(result.newID, result.newTitle, false); // CHECK
 				} else {
 					allSuccessful = false;
-					this.toastManager.show('error',`Unknown error saving note: ${result.newID}`);
+					Notifier.error(`Unknown error saving note: ${result.newID}`);
 				}
 			}
-			if (allSuccessful) this.toastManager.show('info','Saved all notes');
+			if (allSuccessful) Notifier.success('Saved all notes');
 		} catch (err) {
-			this.toastManager.show('error','Error saving current note: '+err);
+			Notifier.error('Error saving current note: '+err);
 		}
 	}
 
@@ -663,11 +804,11 @@ export class UIManager {
 	}
 
 	private setCurrentNote(noteID: string): void {
-		this.noteManager.updatePersistentText(this.persistentTextInput.textContent);
+		this.noteManager.updatePersistentText(this.tinyMDE.getContent()); // Save before changing notes!
 		const result = this.noteManager.changeCurrentNote(noteID);
 
 		if (!result) {
-			this.toastManager.show('error',`Error changing note to ${noteID}!`);
+			Notifier.error(`Error changing note to ${noteID}!`);
 			return;
 		}
 
@@ -675,13 +816,18 @@ export class UIManager {
 		
 		if (noteID == '.overview') {
 			overviewControls.classList.add('show');
-			
+			// Disable editing tinymde
+			this.tinyMDE.e.setAttribute('contenteditable','false');
 			this.refreshOverviewPage();
 			
 		} else {
+			this.tinyMDE.e.setAttribute('contenteditable','true');
 			overviewControls.classList.remove('show');
 			this.logInput.disabled = false;
 		}
+
+		// load persistent text content
+		this.tinyMDE.setContent(this.noteManager.getPersistentText(result));
 
 		this.updateSaveStateDisplay();
 		this.displayCurrentEntries();
@@ -795,6 +941,18 @@ export class UIManager {
 				entryTextSpan.innerHTML = text;
 				entryTextDiv.appendChild(entryTextSpan);
 
+
+				const quotedId = entries[index].quotedId;
+				if (quotedId !== undefined && quotedId >= 0 && quotedId < entries.length) {
+					const quotedEntry = entries[quotedId];
+
+					const quotedBlock = document.createElement('div');
+					quotedBlock.classList.add('quoted-entry');
+
+					this.createQuoteElement(quotedEntry, quotedBlock);
+					entryTextDiv.insertBefore(quotedBlock, entryTextSpan); // show quote above text
+				}
+
 				let parentContainer = entryDiv;
 				for (let k = 0; k < indentLevel; k++) {
 					if (!parents[k]) {
@@ -854,15 +1012,30 @@ export class UIManager {
 	}
 
 	private insertNewLine(): void {
-		const lines = this.logInput.value.split('\n');
-		const currentLine = lines[lines.length - 1];
+		const input = this.logInput;
+		const cursorPos = input.selectionStart || 0; // current cursor position
+
+		const valueBeforeCursor = input.value.slice(0, cursorPos);
+		const valueAfterCursor = input.value.slice(cursorPos);
+
+		// Count indentation from the line where the cursor is
+		const lineStart = valueBeforeCursor.lastIndexOf('\n') + 1; // start of current line
+		const currentLine = valueBeforeCursor.slice(lineStart);
 		this.currentIndentationLevel = NoteUtils.countLeadingTabs(currentLine, this.noteManager.userSettings.indentString);
 
+		// Prepare the new line with indentation
 		const newLine = '\n' + this.noteManager.userSettings.indentString.repeat(this.currentIndentationLevel);
-		this.logInput.value += newLine;
+
+		// Insert the new line at the cursor
+		input.value = valueBeforeCursor + newLine + valueAfterCursor;
+
+		// Move the cursor to the start of the new line
+		const newCursorPos = cursorPos + newLine.length;
+		input.setSelectionRange(newCursorPos, newCursorPos);
 
 		this.updateLogInputHeight();
 	}
+
 
 	private updateLogInputHeight(): void {
 		this.logInput.style.height = '0px';

@@ -60,7 +60,7 @@ export class NoteManager {
 				} else {
 					const newNote = await Note.loadFromFile(noteID, this.userSettings.undoStackSize, this.userSettings.saveDebounceTime);
 					if (newNote) {
-						this.addNewNote(newNote);
+						this.addNote(newNote);
 						notesAdded.push({ id: noteID, title: newNote.title });
 					} else {
 						throw new Error(`Could not load note with ID: "${noteID}"!`);
@@ -124,14 +124,28 @@ export class NoteManager {
 	public createNewNote(noteTitle?: string): string { // Used to actually create a note
 		noteTitle = noteTitle || `Untitled ${this.notes.size}`;
 		const newNote = new Note(noteTitle);
-		this.addNewNote(newNote);
-		this.writeToCache();
+		this.addNote(newNote);
+		this.saveMetadata();
 		return newNote.id;
 	}
 
-	private addNewNote(newNote: Note): void { // Used to add a note's data to its list
+	private addNote(newNote: Note): void { // Used to add a note's data to its list
 		this.notes.set(newNote.id, newNote);
 		this.unopenedNotes.push(newNote.id);
+	}
+
+	public deleteNote(noteID: string): boolean {
+		if (noteID == '.overview') return false;
+
+		const note = this.notes.get(noteID);
+		if (!note) throw new Error('Could not find note with ID: '+noteID);
+
+		this.unopenedNotes.splice(this.unopenedNotes.indexOf(noteID), 1);
+
+		const result = this.notes.delete(noteID);
+		this.saveMetadata();
+
+		return result;
 	}
 
 	/** 
@@ -189,14 +203,12 @@ export class NoteManager {
 	/**
 	 * @todo Use a try/catch; also remember to select the returned note in DOM
 	 */
-	public closeCurrentNote(): string {
-		// Remove note from openNotes and select fallback active note
-		// Basically the same but without the DOM shit
+	public closeNote(noteID?: string): string {
+		noteID = noteID || this.activenoteID;
+		if (!this.openNotes.includes(noteID)) throw new Error(`Could not find note with id ${this.activenoteID} to close it`);
 
-		if (!this.openNotes.includes(this.activenoteID)) throw new Error(`Could not find note with id ${this.activenoteID} to close it`);
-
-		this.openNotes.splice(this.openNotes.indexOf(this.activenoteID), 1);
-		this.unopenedNotes.push(this.activenoteID);
+		this.openNotes.splice(this.openNotes.indexOf(noteID), 1);
+		this.unopenedNotes.push(noteID);
 
 		const openNotesAsArray = Array.from(this.openNotes);
 		const newnoteID = openNotesAsArray[openNotesAsArray.length - 1] || '.overview';
@@ -289,7 +301,7 @@ export class NoteManager {
 	}
 
 	/**
-	 * 
+	 * Writes `newText` to persistentText save stack, and updates dirty state
 	 * @param newText 
 	 * @param noteID 
 	 * @returns true if the save state changed
@@ -316,6 +328,17 @@ export class NoteManager {
 		// this.writeToCache();
 		
 		return wasUnsaved != isUnsavedNow;
+	}
+
+	public getEntry(entryID: number): Entry {
+		const note = this.notes.get(this.activenoteID);
+		if (!note) return;
+
+		const targetEntry = note.getDisplayedEntries()[entryID];
+		
+		if (!targetEntry) throw new Error(`Could not find entry with ID ${entryID}`);
+
+		return targetEntry;
 	}
 
 	public getEntryText(entryID: number): string {
@@ -416,7 +439,7 @@ export class NoteManager {
 	/** 
 	 * UIManager: Take the newEntry passed back and add it to the DOM
 	*/
-	public submitEntry(entryText: string, currentTime: Date): Entry | null {
+	public submitEntry(entryText: string, currentTime: Date, quotedEntryID: number | null): Entry | null {
 		// UI will supply raw text and current time
 		// Append entry, mark note unsaved, trigger re-render callback
 		if (entryText.trim().length == 0) return null;
@@ -428,7 +451,7 @@ export class NoteManager {
 		// This is mostly a visual effect, but pre-calculating it now saves the renderer from having to do it.
 		const splitLines = entryText.split('\n');
 		const indentLevel = NoteUtils.countLeadingTabs(splitLines[splitLines.length - 1], this.userSettings.indentString);
-		const newEntry = note.createNewEntry(entryText, currentTime, indentLevel, this.userSettings.groupInterval);
+		const newEntry = note.createNewEntry(entryText, currentTime, indentLevel, this.userSettings.groupInterval, quotedEntryID ?? undefined);
 
 		// if (!this.cachedData.unsavedEntries[note.id]) this.cachedData.unsavedEntries[note.id] = [];
 		// this.cachedData.unsavedEntries[note.id].push(newEntry);
@@ -467,6 +490,7 @@ export class NoteManager {
 		this.cachedData.currentnoteID = this.activenoteID;
 		this.cachedData.openNotes = this.openNotes;
 
+		console.log(this.cachedData);
 		await NoteUtils.writeCache(this.userSettings.cacheFileName, JSON.stringify(this.cachedData, null, 2));
 	}
 

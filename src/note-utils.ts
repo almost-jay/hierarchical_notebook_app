@@ -1,5 +1,5 @@
 import { BaseDirectory } from '@tauri-apps/api/path';
-import { exists, mkdir, readFile, readTextFile, writeFile, writeTextFile } from '@tauri-apps/plugin-fs';
+import { exists, mkdir, readFile, readTextFile, remove, writeFile, writeTextFile } from '@tauri-apps/plugin-fs';
 
 export class NoteUtils {
 	public static slugify(text: string): string {
@@ -65,6 +65,11 @@ export class NoteUtils {
 
 	public static async writeBinaryFile(filename: string, content: Uint8Array): Promise<void> {
 		await writeFile(`${filename}.bin`, content, { baseDir: BaseDirectory.AppData } );
+	}
+
+	public static async eraseNote(filename: string): Promise<void> {
+		await remove(`${filename}-persistent.md`, { baseDir: BaseDirectory.AppData });
+		await remove(`${filename}-entries.bin`, { baseDir: BaseDirectory.AppData });
 	}
 
 	public static async doesCacheExist(filename: string): Promise<boolean> {
